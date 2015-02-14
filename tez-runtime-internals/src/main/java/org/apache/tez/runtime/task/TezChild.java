@@ -396,7 +396,7 @@ public class TezChild {
     private final Throwable throwable;
     private final String errorMessage;
 
-    ContainerExecutionResult(ExitStatus exitStatus, @Nullable Throwable throwable,
+    public ContainerExecutionResult(ExitStatus exitStatus, @Nullable Throwable throwable,
                              @Nullable String errorMessage) {
       this.exitStatus = exitStatus;
       this.throwable = throwable;
