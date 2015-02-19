@@ -111,4 +111,8 @@ public interface AppContext {
   String getAMUser();
 
   Credentials getAppCredentials();
+
+  public Integer getTaskCommunicatorIdentifier(String name);
+  public Integer getTaskScheduerIdentifier(String name);
+  public Integer getContainerLauncherIdentifier(String name);
 }
