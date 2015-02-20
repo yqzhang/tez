@@ -19,6 +19,7 @@
 package org.apache.tez.examples;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,7 +131,7 @@ public class JoinValidate extends TezExampleBase {
 
   private DAG createDag(TezConfiguration tezConf, Path lhs, Path rhs, int numPartitions)
       throws IOException {
-    DAG dag = DAG.create("JoinValidate");
+    DAG dag = DAG.create(getDagName());
 
     // Configuration for intermediate output - shared by Vertex1 and Vertex2
     // This should only be setting selective keys from the underlying conf. Fix after there's a
@@ -147,15 +148,18 @@ public class JoinValidate extends TezExampleBase {
         MRInput
             .createConfigBuilder(new Configuration(tezConf), TextInputFormat.class,
                 lhs.toUri().toString()).groupSplits(!isDisableSplitGrouping()).build());
+    setVertexProperties(lhsVertex, getLhsVertexProperties());
 
     Vertex rhsVertex = Vertex.create(RHS_INPUT_NAME, ProcessorDescriptor.create(
         ForwardingProcessor.class.getName())).addDataSource("rhs",
         MRInput
             .createConfigBuilder(new Configuration(tezConf), TextInputFormat.class,
                 rhs.toUri().toString()).groupSplits(!isDisableSplitGrouping()).build());
+    setVertexProperties(rhsVertex, getRhsVertexProperties());
 
     Vertex joinValidateVertex = Vertex.create("joinvalidate", ProcessorDescriptor.create(
         JoinValidateProcessor.class.getName()), numPartitions);
+    setVertexProperties(joinValidateVertex, getValidateVertexProperties());
 
     Edge e1 = Edge.create(lhsVertex, joinValidateVertex, edgeConf.createDefaultEdgeProperty());
     Edge e2 = Edge.create(rhsVertex, joinValidateVertex, edgeConf.createDefaultEdgeProperty());
@@ -163,6 +167,30 @@ public class JoinValidate extends TezExampleBase {
     dag.addVertex(lhsVertex).addVertex(rhsVertex).addVertex(joinValidateVertex).addEdge(e1)
         .addEdge(e2);
     return dag;
+  }
+
+  private void setVertexProperties(Vertex vertex, Map<String, String> properties) {
+    if (properties != null) {
+      for (Map.Entry<String, String> entry : properties.entrySet()) {
+        vertex.setConf(entry.getKey(), entry.getValue());
+      }
+    }
+  }
+
+  protected Map<String, String> getLhsVertexProperties() {
+    return null;
+  }
+
+  protected Map<String, String> getRhsVertexProperties() {
+    return null;
+  }
+
+  protected Map<String, String> getValidateVertexProperties() {
+    return null;
+  }
+
+  protected String getDagName() {
+    return "JoinValidate";
   }
 
   public static class JoinValidateProcessor extends SimpleProcessor {
