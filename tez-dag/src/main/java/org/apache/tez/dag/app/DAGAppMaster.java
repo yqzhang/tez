@@ -764,7 +764,7 @@ public class DAGAppMaster extends AbstractService {
       DAGAppMasterEventDagCleanup cleanupEvent = (DAGAppMasterEventDagCleanup) event;
       LOG.info("Cleaning up DAG: name=" + cleanupEvent.getDag().getName() + ", with id=" +
           cleanupEvent.getDag().getID());
-      containerLauncher.dagComplete(cleanupEvent.getDag());
+      containerLauncherRouter.dagComplete(cleanupEvent.getDag());
       taskAttemptListener.dagComplete(cleanupEvent.getDag());
       nodes.dagComplete(cleanupEvent.getDag());
       containers.dagComplete(cleanupEvent.getDag());
@@ -778,7 +778,7 @@ public class DAGAppMaster extends AbstractService {
     case NEW_DAG_SUBMITTED:
       // Inform sub-components that a new DAG has been submitted.
       taskSchedulerEventHandler.dagSubmitted();
-      containerLauncher.dagSubmitted();
+      containerLauncherRouter.dagSubmitted();
       taskAttemptListener.dagSubmitted();
       break;
     default:
