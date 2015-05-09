@@ -44,6 +44,7 @@ import org.apache.tez.common.ContainerContext;
 import org.apache.tez.common.ContainerTask;
 import org.apache.tez.common.security.JobTokenSecretManager;
 import org.apache.tez.dag.api.TaskHeartbeatRequest;
+import org.apache.tez.dag.api.TaskHeartbeatResponse;
 import org.apache.tez.dag.api.TezException;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.tez.common.TezTaskUmbilicalProtocol;
@@ -61,14 +62,11 @@ import org.apache.tez.dag.records.TezTaskAttemptID;
 import org.apache.tez.dag.records.TezTaskID;
 import org.apache.tez.dag.records.TezVertexID;
 import org.apache.tez.runtime.api.events.DataMovementEvent;
-import org.apache.tez.runtime.api.events.InputInitializerEvent;
 import org.apache.tez.runtime.api.events.TaskAttemptCompletedEvent;
 import org.apache.tez.runtime.api.events.TaskStatusUpdateEvent;
 import org.apache.tez.runtime.api.impl.EventType;
 import org.apache.tez.runtime.api.impl.TaskSpec;
 import org.apache.tez.runtime.api.impl.TezEvent;
-import org.apache.tez.runtime.api.impl.TezHeartbeatRequest;
-import org.apache.tez.runtime.api.impl.TezHeartbeatResponse;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -252,14 +250,13 @@ public class TestTaskAttemptListenerImplTezDag {
   public void testTaskHeartbeatResponse() throws Exception {
     List<TezEvent> events = new ArrayList<TezEvent>();
     List<TezEvent> eventsToSend = new ArrayList<TezEvent>();
-    TezHeartbeatResponse response = generateHeartbeat(events, 0, 1, 2, eventsToSend);
+    TaskHeartbeatResponse response = generateHeartbeat(events, 0, 1, 2, eventsToSend);
     
     assertEquals(2, response.getNextFromEventId());
-    assertEquals(1, response.getLastRequestId());
     assertEquals(eventsToSend, response.getEvents());
   }
 
-  private TezHeartbeatResponse generateHeartbeat(List<TezEvent> events,
+  private TaskHeartbeatResponse generateHeartbeat(List<TezEvent> events,
       int fromEventId, int maxEvents, int nextFromEventId,
       List<TezEvent> sendEvents) throws IOException, TezException {
     ContainerId containerId = createContainerId(appId, 1);
@@ -274,7 +271,7 @@ public class TestTaskAttemptListenerImplTezDag {
     taskAttemptListener.registerTaskAttempt(amContainerTask, containerId, 0);
 
     TaskHeartbeatRequest request = mock(TaskHeartbeatRequest.class);
-
+    doReturn(containerId.toString()).when(request).getContainerIdentifier();
     doReturn(containerId.toString()).when(request).getContainerIdentifier();
     doReturn(taskAttemptID).when(request).getTaskAttemptId();
     doReturn(events).when(request).getEvents();
