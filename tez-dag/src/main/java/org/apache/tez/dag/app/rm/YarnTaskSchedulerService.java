@@ -423,7 +423,11 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
-  // AMRMClientAsync interface methods
+  /**
+   * Called when the ResourceManager responds to a heartbeat with completed
+   * containers. If the response contains both completed containers and
+   * allocated containers, this will be called before containersAllocated.
+   */
   @Override
   public void onContainersCompleted(List<ContainerStatus> statuses) {
     if (isStopped.get()) {
@@ -437,6 +441,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         HeldContainer delayedContainer = heldContainers.get(completedId);
 
         Object task = releasedContainers.remove(completedId);
+
+        // yunqi: An AM-released container has completed the task
         if(task != null){
           if (delayedContainer != null) {
             LOG.warn("Held container should be null since releasedContainer is not");
@@ -451,6 +457,10 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
           appContainerStatus.put(task, containerStatus);
           continue;
         }
+
+        // yunqi: A non-AM-realeased container has completed the task, remove
+        // the container from heldContainers since we no longer have it
+        // allocated for us
 
         // not found in released containers. check currently allocated containers
         // no need to release this container as the RM has already completed it
@@ -481,6 +491,11 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  /**
+   * Called when the ResourceManager responds to a heartbeat with allocated
+   * containers. If the response containers both completed containers and
+   * allocated containers, this will be called after containersCompleted.
+   */
   @Override
   public void onContainersAllocated(List<Container> containers) {
     if (isStopped.get()) {
@@ -497,10 +512,14 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
 
     synchronized (this) {
+      // yunqi: Assign newly allocated containers to tasks, and release
+      // the ones that we are not able to assign (container reuse disabled)
       if (!shouldReuseContainers) {
         List<Container> modifiableContainerList = Lists.newLinkedList(containers);
         assignedContainers = assignNewlyAllocatedContainers(
             modifiableContainerList);
+      // yunqi: Put all the newly allocated containers to the delayedContainers
+      // (container reuse enabled)
       } else {
         // unify allocations
         pushNewContainerToDelayed(containers);
@@ -545,6 +564,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
 
     return assignedContainers;
   }
+
+  // yunqi: 06-09-2015
 
   private synchronized Map<CookieContainerRequest, Container>
       tryAssignReUsedContainers(Iterable<Container> containers) {
@@ -855,6 +876,11 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  /**
+   * Called when the ResourceManager wants the ApplicationMaster to shutdown
+   * for being out of sync etc. The ApplicationMaster should not unregister
+   * with the RM unless the ApplicationMaster wants to be the last attempt.
+   */
   @Override
   public void onShutdownRequest() {
     if (isStopped.get()) {
@@ -864,6 +890,10 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     appClientDelegate.appShutdownRequested();
   }
 
+  /**
+   * Called when nodes tracked by the ResourceManager have changed in health,
+   * availability etc.
+   */
   @Override
   public void onNodesUpdated(List<NodeReport> updatedNodes) {
     if (isStopped.get()) {
@@ -896,6 +926,13 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return appClientDelegate.getProgress();
   }
 
+  /**
+   * Called when error comes from RM communications as well as from errors in
+   * the callback itself from the app. Calling
+   * stop() is the recommended action.
+   *
+   * @param e
+   */
   @Override
   public void onError(Throwable t) {
     if (isStopped.get()) {
