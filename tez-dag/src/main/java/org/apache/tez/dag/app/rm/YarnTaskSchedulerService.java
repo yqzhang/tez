@@ -1360,8 +1360,10 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
-  // yunqi: Only check if the memory requirement fits
-  // TODO: What about CPU?
+  // yunqi: Only check if the memory requirement fits, and it is only used to
+  // check if the total amount of available resources is sufficient for the
+  // highest priority task. If not, we need to preempt in order to free some
+  // resources for the task
   private boolean fitsIn(Resource toFit, Resource resource) {
     // YARN-893 prevents using correct library code
     //return Resources.fitsIn(toFit, resource);
@@ -1547,8 +1549,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
   
-  // 06/10/2015
-
+  // yunqi: Given a list of containers, put them in hold
   private void pushNewContainerToDelayed(List<Container> containers){
     long expireTime = getHeldContainerExpireTime(System.currentTimeMillis());
 
@@ -1653,6 +1654,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  // yunqi: assigned a reused container to the pending task that has the
+  // highest priority
   private synchronized boolean assignReUsedContainerWithLocation(
     Container container,
     ContainerAssigner assigner,
@@ -1696,6 +1699,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return false;
   }
 
+  // yunqi: Release unassigned containers back to the RM
   private void releaseUnassignedContainers(Iterable<Container> containers) {
     for (Container container : containers) {
       LOG.info("Releasing unused container: "
@@ -1745,6 +1749,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  // yunqi: an internal class for assigning containers to tasks at different
+  // locality levels
   private abstract class ContainerAssigner {
 
     protected final String locality;
@@ -1786,6 +1792,9 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
   
+  // yunqi: The only difference between NodeLocalContainerAssigner and
+  // RackLocalContainerAssigned && NonLocalContainerAssigner is that when
+  // honorLocality == true, the later 2 do not do anything
   private class NodeLocalContainerAssigner extends ContainerAssigner {
 
     NodeLocalContainerAssigner() {
@@ -1877,7 +1886,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
 
   }
   
-  
+  // yunqi: The class that manages the containers and implements the delayed
+  // scheduling
   @VisibleForTesting
   class DelayedContainerManager extends Thread {
 
@@ -1906,6 +1916,9 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       super.setName("DelayedContainerManager");
     }
     
+    // yunqi: An infinite loop that constantly tries to assign the held
+    // containers, which are sorted in a priority queue based on the next
+    // scheduling time
     @Override
     public void run() {
       while(running) {
@@ -2090,6 +2103,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
 
   }
   
+  // yunqi: Only useful when running in session mode, and this function tries
+  // determine how many and which containers to hold for the current session
   synchronized void determineMinHeldContainers() {
     sessionMinHeldContainers.clear();
     if (sessionNumMinHeldContainers <= 0) {
@@ -2165,6 +2180,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         + " out of total held containers: " + heldContainers.size());
   }
 
+  // yunqi: Just an utility function that iterates through the containers
   private static class ContainerIterable implements Iterable<Container> {
 
     private final Iterable<HeldContainer> delayedContainers;
@@ -2199,6 +2215,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  // yunqi: A wrapper around the basic container that also keeps some
+  // information about the delayed scheduling
   static class HeldContainer {
 
     enum LocalityMatchLevel {
