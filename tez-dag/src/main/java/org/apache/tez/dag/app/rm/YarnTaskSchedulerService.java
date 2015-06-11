@@ -565,8 +565,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return assignedContainers;
   }
 
-  // yunqi: 06-09-2015
-
   private synchronized Map<CookieContainerRequest, Container>
       tryAssignReUsedContainers(Iterable<Container> containers) {
 
@@ -626,6 +624,9 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         + ", isNew=" + isNew);
     }
 
+    // yunqi: No more work is expected for the AM, so either keep holding the
+    // container or release it back to the RM, depending on whether running in
+    // session mode and whether the continer holding time has expired
     if (state.equals(DAGAppMasterState.IDLE) || taskRequests.isEmpty()) {
       // reset locality level on held container
       // if sessionDelay defined, push back into delayed queue if not already
@@ -642,6 +643,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       long currentTime = System.currentTimeMillis();
       boolean releaseContainer = false;
 
+      // yunqi: Release the container if it is new, or it has expired when not
+      // running in session mode
       if (isNew || (heldContainer.getContainerExpiryTime() <= currentTime
           && idleContainerTimeoutMin != -1)) {
         // container idle timeout has expired or is a new unused container. 
@@ -659,6 +662,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         }
       }
       
+      // yunqi: Release the container
       if (releaseContainer) {
         LOG.info("No taskRequests. Container's idle timeout delay expired or is new. " +
             "Releasing container"
@@ -672,6 +676,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
             + ", isNew=" + isNew);
           releaseUnassignedContainers(
               Lists.newArrayList(heldContainer.getContainer()));        
+      // yunqi: Keep holding it since the holding time hasn't expired yet
       } else {
         // no outstanding work and container idle timeout not expired
         if (LOG.isDebugEnabled()) {
@@ -687,6 +692,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
             heldContainer.getContainer(), currentTime
                 + localitySchedulingDelay);        
       }
+    // yunqi: More work needs to be done, so allocate the container to some
+    // tasks
     } else if (state.equals(DAGAppMasterState.RUNNING)) {
       // clear min held containers since we need to allocate to tasks
       if (!sessionMinHeldContainers.isEmpty()) {
@@ -714,6 +721,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       // Each time a container is seen, we try node, rack and non-local in that
       // order depending on matching level allowed
 
+      // yunqi: Try node-local first
       // if match level is NEW or NODE, match only at node-local
       // always try node local matches for other levels
       if (isNew
@@ -729,6 +737,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         }
       }
 
+      // yunqi: Try within the same rack
       // if re-use allowed at rack
       // match against rack if match level is RACK or NON-LOCAL
       // if scheduling delay is 0, match at RACK allowed without a sleep
@@ -746,6 +755,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         }
       }
 
+      // yunqi: Try remote node
       // if re-use allowed at non-local
       // match against rack if match level is NON-LOCAL
       // if scheduling delay is 0, match at NON-LOCAL allowed without a sleep
@@ -762,6 +772,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         }
       }
 
+      // yunqi: Still not able to assign the container to any task, so release
+      // it if the holding time has expired
       if (assignedContainers.isEmpty()) {
 
         long currentTime = System.currentTimeMillis();
@@ -791,6 +803,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
           // EOL true if container's match level is NON-LOCAL
           boolean hitFinalMatchLevel = localityMatchLevel.equals(
             HeldContainer.LocalityMatchLevel.NON_LOCAL);
+          // yunqi: If we haven't reached the worst locality level, increment
+          // the locality-level
           if (!hitFinalMatchLevel) {
             // EOL also true if locality delay is 0
             // or rack-local or non-local is disabled
@@ -810,6 +824,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
             }
           }
           
+          // yunqi: It seems this container has reached the lowest locality level,
+          // so we might want to release it
           if (hitFinalMatchLevel) {
             boolean safeToRelease = true;
             Priority topPendingPriority = amRmClient.getTopPriority();
@@ -823,6 +839,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
               safeToRelease = false;
             }
             
+            // yunqi: Release the container if there is any pending task but cannot
+            // find a match here
             // Are there any pending requests at any priority?
             // release if there are tasks or this is not a session
             if (safeToRelease && 
@@ -835,6 +853,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
                 + ". isNew=" + isNew);
               releaseUnassignedContainers(
                 Lists.newArrayList(heldContainer.container));
+            // yunqi: Since there is nothing else pending, may as well just hold it for
+            // a little longer
             } else {
               // if no tasks, treat this like an idle session
               heldContainer.resetLocalityMatchLevel();
@@ -842,6 +862,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
                 heldContainer.getContainer(),
                 currentTime + localitySchedulingDelay);
             }
+          // yunqi: The container hasn't hitted its final locality level yet, so wait for
+          // a little bit and try again
           } else {
             // Schedule delay container to match at a later try
             delayedContainerManager.addDelayedContainer(
@@ -866,6 +888,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return null;
   }
 
+  // yunqi: Once the DAG has completed all the work, reset the locality levels for all
+  // the held containers and notify the container manager
   @Override
   public synchronized void dagComplete() {
     for (HeldContainer heldContainer : heldContainers.values()) {
@@ -961,6 +985,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
   
+  // yunqi: Function to allocate (submit a request for running a task) a task
   @Override
   public synchronized void allocateTask(
       Object task,
@@ -981,6 +1006,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     addRequestAndTrigger(task, request, hosts, racks);
   }
   
+  // yunqi: Function to allocate (submit a request for running a task) a task
   @Override
   public synchronized void allocateTask(
       Object task,
@@ -1016,6 +1042,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     addRequestAndTrigger(task, request, hosts, racks);
   }
   
+  // yunqi: Record the request and trigger the scheduling function
   private void addRequestAndTrigger(Object task, CookieContainerRequest request,
       String[] hosts, String[] racks) {
     addTaskRequest(task, request);
@@ -1027,6 +1054,9 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       " rack: " + ((racks!=null&&racks.length>0)?racks[0]:"null"));
   }
 
+  // yunqi: A task has finished (or maybe terminated), deallocate the container
+  // that was previously assigned to the task. Depending on the setting, keep
+  // the container in hold or return it back to the RM.
   /**
    * @param task
    *          the task to de-allocate.
@@ -1101,6 +1131,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return null;
   }
 
+  // yunqi: Figure out whether the task fits into a given container
   boolean canFit(Resource arg0, Resource arg1) {
     int mem0 = arg0.getMemory();
     int mem1 = arg1.getMemory();
@@ -1117,6 +1148,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return (int) Math.ceil((original * percent)/100.f);
   }
   
+  // yunqi: TODO: Figure out why we would need preemption?
   void preemptIfNeeded() {
     if (preemptionPercentage == 0) {
       // turned off
@@ -1328,12 +1360,15 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  // yunqi: Only check if the memory requirement fits
+  // TODO: What about CPU?
   private boolean fitsIn(Resource toFit, Resource resource) {
     // YARN-893 prevents using correct library code
     //return Resources.fitsIn(toFit, resource);
     return resource.getMemory() >= toFit.getMemory();
   }
 
+  // yunqi: TODO: Figure out what this priority is
   private CookieContainerRequest getMatchingRequestWithPriority(
       Container container,
       String location) {
@@ -1356,6 +1391,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return null;
   }
 
+  // yunqi: Find the best container request that matches a given container
   private CookieContainerRequest getMatchingRequestWithoutPriority(
       Container container,
       String location,
@@ -1385,6 +1421,9 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
               return cookieContainerRequest;
             }
             ContainerId affCId = cookieContainerRequest.getAffinitizedContainer();
+            // yunqi: If the requested container is allocated to us or it is not in use,
+            // there is a chance that we can match the request, so either find the match
+            // or simply wait for longer
             boolean canMatchTaskWithAffinity = true;
             if (affCId == null || 
                 !heldContainers.containsKey(affCId) ||
@@ -1394,6 +1433,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
               // affinitized container is in use
               canMatchTaskWithAffinity = false;
             }
+            // yunqi: As soon as we find a task that has a matching affinity, we return it
             if (canMatchTaskWithAffinity) {
               if (container.getId().equals(
                   cookieContainerRequest.getAffinitizedContainer())) {
@@ -1409,6 +1449,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
                     + " due to affinity. Request: " + cookieContainerRequest
                     + " affContainer: " + affCId);
               }
+            // yunqi: Does not match the requested matching level, but this is the best we
+            // can find so far
             } else {
               firstMatch = cookieContainerRequest;
             }
@@ -1420,6 +1462,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return firstMatch;
   }
 
+  // yunqi: TODO: Figure out what this signature is
   private boolean canAssignTaskToContainer(
       CookieContainerRequest cookieContainerRequest, Container container) {
     HeldContainer heldContainer = heldContainers.get(container.getId());
@@ -1451,6 +1494,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     return request.getCookie().getTask();
   }
 
+  // yunqi: Release containers back to the RM
   private void releaseContainer(ContainerId containerId) {
     Object assignedTask = containerAssignments.remove(containerId);
     if (assignedTask != null) {
@@ -1472,6 +1516,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
 
+  // yunqi: Assign a container to a given task
   private void assignContainer(Object task,
       Container container,
       CookieContainerRequest assigned) {
@@ -1502,6 +1547,8 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     }
   }
   
+  // 06/10/2015
+
   private void pushNewContainerToDelayed(List<Container> containers){
     long expireTime = getHeldContainerExpireTime(System.currentTimeMillis());
 
