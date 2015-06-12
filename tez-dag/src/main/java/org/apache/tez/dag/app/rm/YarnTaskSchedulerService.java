@@ -203,6 +203,77 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       this.affinitizedContainerId = containerId;
     }
 
+    /**
+     * yunqi: Support for specifying node label expression
+     * @param nodeLabelExpression The node label expression to match
+     */
+    public CookieContainerRequest(
+        Resouce capability,
+        String[] hosts,
+        String[] racks,
+        Priority priority,
+        String nodeLabelExpression,
+        CRCookie cookie) {
+      super(capability, hosts, racks, priority, true, nodeLabelExpression);
+      this.cookie = cookie;
+    }
+
+    /**
+     * yunqi: Support for specifying node label expression (with affinitized
+     * container ID)
+     * @param nodeLabelExpression The node label expression to match
+     */
+    public CookieContainerRequest(
+        Resource capability,
+        ContainerId containerId,
+        String[] hosts,
+        String[] racks,
+        Priority priority,
+        String nodeLabelExpression,
+        CRCookie cookie) {
+      this(capability, hosts, racks, priority, nodeLabelExpression, cookie);
+      this.affinitizedContainerId = containerId;
+    }
+
+    /**
+     * yunqi: Support for specifying whether to relax locality requirement and
+     * the node label expression
+     * @param relaxLocality Whether to relax the locality requirement
+     * @param nodeLabelExpression The node label expression to match
+     */
+    public CookieContainerRequest(
+        Resource capability,
+        String[] hosts,
+        String[] racks,
+        Priority priority,
+        boolean relaxLocality,
+        String nodeLabelExpression,
+        CRCookie cookie) {
+      super(capability, hosts, racks, priority, relaxLocality,
+            nodeLabelExpression);
+      this.cookie = cookie;
+    }
+
+    /**
+     * yunqi: Support for specifying whether to relax locality requirement and
+     * the node label expression (with affinitized container ID)
+     * @param relaxLocality Whether to relax the locality requirement
+     * @param nodeLabelExpression The node label expression to match
+     */
+    public CookieContainerRequest(
+        Resource capability,
+        ContainerId containerId,
+        String[] hosts,
+        String[] racks,
+        Priority priority,
+        boolean relaxLocality,
+        String nodeLabelExpression,
+        CRCookie cookie) {
+      this(capability, hosts, racks, priority, relaxLocality,
+           nodeLabelExpression, cookie);
+      this.affinitizedContainerId = containerId;
+    }
+
     CRCookie getCookie() {
       return cookie;
     }
