@@ -18,6 +18,12 @@
 
 package org.apache.tez.dag.app.rm;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.tez.dag.app.AppContext;
+import org.apache.tez.dag.app.rm.TaskSchedulerService.TaskSchedulerAppCallback;
+import org.apache.tez.dag.app.rm.container.ContainerSignatureMatcher;
+
 /**
  * TODO: Start with an extension on top of the regular YARN task scheduler,
  * and we might need to change this to a completely different class later
@@ -25,4 +31,17 @@ package org.apache.tez.dag.app.rm;
  */
 public class PrimaryTenantYarnTaskSchedulerService extends 
                  YarnTaskSchedulerService {
+  private static final Logger LOG = LoggerFactory.getLogger(
+      PrimaryTenantYarnTaskSchedulerService.class);
+
+  public PrimaryTenantYarnTaskSchedulerService(
+                        TaskSchedulerAppCallback appClient,
+                        ContainerSignatureMatcher containerSignatureMatcher,
+                        String appHostName,
+                        int appHostPort,
+                        String appTrackingUrl,
+                        AppContext appContext) {
+    super(appClient, containerSignatureMatcher, appHostName, appHostPort,
+          appTrackingUrl, appContext);
+  }
 }
