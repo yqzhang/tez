@@ -1050,6 +1050,15 @@ public class TezConfiguration extends Configuration {
   public static final boolean TEZ_LOCAL_MODE_DEFAULT = false;
 
   /**
+   *  Boolean value. Enable primary tenant mode execution in Tez.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_PRIMARY_TENANT =
+    TEZ_PREFIX + "primary.tenant";
+
+  public static final boolean TEZ_PRIMARY_TENANT_DEFAULT = false;
+
+  /**
    *  Tez AM Inline Mode flag. Not valid till Tez-684 get checked-in
    */
   @Private

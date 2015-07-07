@@ -333,8 +333,18 @@ public class TaskSchedulerEventHandler extends AbstractService
           host, port, trackingUrl, appContext);
     }
     else {
-      return new YarnTaskSchedulerService(this, this.containerSignatureMatcher,
-          host, port, trackingUrl, appContext);
+      boolean primaryTenant = getConfig().getBoolean(
+          TezConfiguration.TEZ_PRIMARY_TENANT,
+          TezConfiguration.TEZ_PRIMARY_TENANT_DEFAULT);
+      if (primaryTenant) {
+        return new PrimaryTenantYarnTaskSchedulerService(
+                      this, this.containerSignatureMatcher, host, port,
+                      trackingUrl, appContext);
+      } else {
+        return new YarnTaskSchedulerService(
+                      this, this.containerSignatureMatcher, host, port,
+                      trackingUrl, appContext);
+      }
     }
   }
   
