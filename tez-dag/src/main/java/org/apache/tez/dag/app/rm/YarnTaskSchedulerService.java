@@ -53,7 +53,6 @@ import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.api.records.ResourceRequest;
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest;
 import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
-import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.RackResolver;
 import org.apache.hadoop.yarn.util.resource.Resources;
@@ -84,8 +83,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
                              implements AMRMClientAsync.CallbackHandler {
   private static final Logger LOG = LoggerFactory.getLogger(YarnTaskSchedulerService.class);
 
-
-  final YarnClient yarnClient;
 
   final TezAMRMClientAsync<CookieContainerRequest> amRmClient;
   final TaskSchedulerAppCallback realAppClient;
@@ -296,7 +293,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     this.appCallbackExecutor = createAppCallbackExecutorService();
     this.containerSignatureMatcher = containerSignatureMatcher;
     this.appClientDelegate = createAppCallbackDelegate(appClient);
-    this.yarnClient = YarnClient.createYarnClient();
     this.amRmClient = TezAMRMClientAsync.createAMRMClientAsync(1000, this);
     this.appHostName = appHostName;
     this.appHostPort = appHostPort;
@@ -318,7 +314,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     this.appCallbackExecutor = createAppCallbackExecutorService();
     this.containerSignatureMatcher = containerSignatureMatcher;
     this.appClientDelegate = createAppCallbackDelegate(appClient);
-    this.yarnClient = YarnClient.createYarnClient();
     this.amRmClient = client;
     this.appHostName = appHostName;
     this.appHostPort = appHostPort;
@@ -362,8 +357,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
   // AbstractService methods
   @Override
   public synchronized void serviceInit(Configuration conf) {
-
-    yarnClient.init(conf);
 
     amRmClient.init(conf);
     int heartbeatIntervalMax = conf.getInt(
@@ -441,7 +434,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
     try {
       RegisterApplicationMasterResponse response;
       synchronized (this) {
-        yarnClient.start();
         amRmClient.start();
         response = amRmClient.registerApplicationMaster(appHostName,
                                                         appHostPort,
@@ -489,7 +481,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       // call client.stop() without lock client will attempt to stop the callback
       // operation and at the same time the callback operation might be trying
       // to get our lock.
-      yarnClient.stop();
       amRmClient.stop();
       appCallbackExecutor.shutdown();
       appCallbackExecutor.awaitTermination(1000l, TimeUnit.MILLISECONDS);
@@ -795,16 +786,6 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
         new HashMap<CookieContainerRequest, Container>();
 
       Container containerToAssign = heldContainer.container;
-
-      // yunqi: just for DEBUG
-      try {
-        LOG.info("Container node labels:"
-            + yarnClient.getNodeToLabels().get(containerToAssign.getNodeId()));
-      } catch (YarnException e) {
-        LOG.error("Yarn Exception while trying to get node labels ", e);
-      } catch (IOException e) {
-        LOG.error("IO Exception while trying to get node labels ", e);
-      }
 
       heldContainer.incrementAssignmentAttempts();
       // Each time a container is seen, we try node, rack and non-local in that
