@@ -624,7 +624,8 @@ public class TaskAttemptImpl implements TaskAttempt,
     }
   }
   
-  Vertex getVertex() {
+  @Override
+  public Vertex getVertex() {
     return vertex;
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.tez.dag.app.rm;
 
+import java.util.HashSet;
 import java.util.Random;
 import java.util.TreeMap;
 
@@ -56,9 +57,9 @@ public class UtilizationTable {
    *
    * @param resourceNeeded The amount of CPU resources needed by the task(s) in
    *                       double ranging in (0.0, 1.0]
-   * @return the node label expression of the cluster that gets randomly picked
+   * @return the node labels of the cluster that gets randomly picked
    */
-  public String pickRandomCluster(double resourceNeeded) {
+  public HashSet<String> pickRandomCluster(double resourceNeeded) {
     double[] availableResourceCDF = new double[utilizationRecords.length];
 
     // Build a CDF of available resources
@@ -82,7 +83,7 @@ public class UtilizationTable {
     int clusterIndex = lowerBound(availableResourceCDF, rand);
 
     return
-        this.utilizationRecords[clusterIndex].getClusterNodeLabelExpression();
+        this.utilizationRecords[clusterIndex].getClusterNodeLabels();
   }
 
   /**
@@ -116,8 +117,8 @@ public class UtilizationTable {
    */
   private class UtilizationRecord {
 
-    // A regular expression that includes all the node labels in the cluster
-    private String clusterNodeLabelExpression;
+    // all the node labels in the cluster
+    private HashSet<String> clusterNodeLabels;
     // The maximum utilization of the cluster represented in double [0.0, 1.0]
     private double maxUtilization;
     // The average utilization of the cluster represented in double [0.0, 1.0]
@@ -128,15 +129,15 @@ public class UtilizationTable {
     /**
      * A constructor that does not require the full trace of utilization.
      *
-     * @param clusterNodeLabelExpression A node label expression that includes
-     *                                   all the environments in the cluster
+     * @param clusterNodeLabels A set of node labels that includes all the
+     *                          environments in the cluster
      * @param maxUtilization The maximum utilization of the cluster
      * @param avgUtilization The average utilization of the cluster
      */
-    protected UtilizationRecord(String clusterNodeLabelExpression,
+    protected UtilizationRecord(HashSet<String> clusterNodeLabels,
                                 double maxUtilization,
                                 double avgUtilization) {
-      this.clusterNodeLabelExpression = clusterNodeLabelExpression;
+      this.clusterNodeLabels = clusterNodeLabels;
       this.maxUtilization = maxUtilization;
       this.avgUtilization = avgUtilization;
     }
@@ -144,38 +145,37 @@ public class UtilizationTable {
     /**
      * A constructor that requires the full trace of utilization.
      *
-     * @param clusterNodeLabelExpression A node label expression that includes
-     *                                   all the environments in the cluster
+     * @param clusterNodeLabels A set of node labels that includes all the
+     *                          environments in the cluster
      * @param maxUtilization The maximum utilization of the cluster
      * @param avgUtilization The average utilization of the cluster
      * @param utilizationTrace The full utilization trace of the cluster center
      *                         represented by a time series
      */
-    protected UtilizationRecord(String clusterNodeLabelExpression,
+    protected UtilizationRecord(HashSet<String> clusterNodeLabels,
                                 double maxUtilization,
                                 double avgUtilization,
                                 TreeMap<Integer, Double> utilizationTrace) {
-      this(clusterNodeLabelExpression, maxUtilization, avgUtilization);
+      this(clusterNodeLabels, maxUtilization, avgUtilization);
       this.utilizationTrace = utilizationTrace;
     }
 
     /**
-     * Getter function for the node label expression.
+     * Getter function for the node labels.
      *
-     * @return The node label expression
+     * @return The node labels
      */
-    protected String getClusterNodeLabelExpression() {
-      return this.clusterNodeLabelExpression;
+    protected HashSet<String> getClusterNodeLabels() {
+      return this.clusterNodeLabels;
     }
     
     /**
-     * Setter function for the node label expression.
+     * Setter function for the node labels.
      *
-     * @param clusterNodeLabelExpression The node label expression to set
+     * @param clusterNodeLabels The node labels to set
      */
-    protected void setClusterNodeLabelExpression(
-                       String clusterNodeLabelExpression) {
-      this.clusterNodeLabelExpression = clusterNodeLabelExpression;
+    protected void setClusterNodeLabels(HashSet<String> clusterNodeLabels) {
+      this.clusterNodeLabels = clusterNodeLabels;
     }
 
     /**

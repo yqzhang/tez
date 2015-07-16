@@ -1113,7 +1113,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
   }
   
   // yunqi: Record the request and trigger the scheduling function
-  private void addRequestAndTrigger(Object task, CookieContainerRequest request,
+  public void addRequestAndTrigger(Object task, CookieContainerRequest request,
       String[] hosts, String[] racks) {
     addTaskRequest(task, request);
     // See if any of the delayedContainers can be used for this task.
@@ -1589,7 +1589,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
   }
 
   // yunqi: Assign a container to a given task
-  private void assignContainer(Object task,
+  public void assignContainer(Object task,
       Container container,
       CookieContainerRequest assigned) {
     CookieContainerRequest request = removeTaskRequest(task);

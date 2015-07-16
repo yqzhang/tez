@@ -21,6 +21,7 @@ package org.apache.tez.dag.app.dag;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.tez.dag.app.dag.Vertex;
 import org.apache.hadoop.yarn.api.records.Container;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.NodeId;
@@ -70,6 +71,7 @@ public interface TaskAttempt {
   TezTaskAttemptID getID();
   TezTaskID getTaskID();
   TezVertexID getVertexID();
+  Vertex getVertex();
   TezDAGID getDAGID();
   
   TaskAttemptReport getReport();
