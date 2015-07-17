@@ -123,35 +123,42 @@ public class PrimaryTenantYarnTaskSchedulerService extends
                            String[] hosts, String[] racks,
                            Priority priority, Object containerSignature,
                            Object clientCookie) {
+
     synchronized (scheduleNodeLabelExpressions) {
       if (scheduleNodeLabelExpressions == null) {
+        // Estimate the number of tasks for the given job
         TaskAttempt attemp = (TaskAttempt) task;
         int parallelism = attemp.getVertex().getTotalTasks();
 
+        // Build the utilization table
         utilizationTable = new UtilizationTable(probabilisticTypeSelection,
                                                 lowPreferenceWeight,
                                                 mediumPreferenceWeight,
                                                 highPreferenceWeight,
                                                 bestFitScheduling);
 
-        // TODO: determine the type of the task
-        TaskType type = TaskType.T_LONG;
+        // TODO: Determine the type of the task
+        TaskType type = TaskType.T_JOB_LONG;
 
+        // Make the scheduling decision
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
             utilizationTable.pickRandomCluster(parallelism,
                                                vcoresPerTask,
                                                memoryPerTask,
                                                type);
 
+        // Build the CDF for future scheduling
         scheduleNodeLabelExpressions = new String[scheduleList.size()];
         for (int i = 0; i < scheduleList.size(); i++) {
           scheduleCDF[i] = scheduleList.get(i).getFirst();
+          // Node labels
           scheduleNodeLabelExpressions[i] = 
             "(" + Joiner.on("|").join(scheduleList.get(i).getSecond()) + ")";
         }
       }
     }
 
+    // Pick a class of environments based on probability
     double rand = this.randomGenerator.nextDouble();
     int nodeLabelExpressionIndex = UtilizationTable.lowerBound(scheduleCDF, rand);
     String nodeLabelExpression =

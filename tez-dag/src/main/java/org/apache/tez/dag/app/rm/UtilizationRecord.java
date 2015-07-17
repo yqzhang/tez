@@ -26,33 +26,33 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A class for the data structure to store individual utilization record for
- * one class of environments.
+ * A class for storing individual utilization record for each class of
+ * environments.
  */
 public class UtilizationRecord {
 
   private static final Logger LOG = LoggerFactory.getLogger(
       UtilizationRecord.class);
 
-  // Type of the utilization record in {periodic, constant, unpredictable}
+  // Class type of the environments in {periodic, constant, unpredictable}
   private final UtilizationRecordType type;
-  // All the node labels in the class represented in set
+  // All node labels in the class represented in set
   private HashSet<String> clusterNodeLabels;
-
-  // Aggregated virtual core headroom for short-running jobs
-  private final double shortVcoresHeadroom;
-  // Aggregated virtual core headroom for medium-running jobs
-  private final double mediumVcoresHeadroom;
-  // Aggregated virtual core headroom for long-running jobs
-  private final double longVcoresHeadroom;
-  // Aggregated memory headroom in MB
-  private final long memoryHeadroom;
-
   // The full utilization trace
   private TreeMap<Integer, Double> utilizationTrace;
 
+  // Aggregated virtual core headroom by class for short-running jobs
+  private final double shortVcoresHeadroom;
+  // Aggregated virtual core headroom by class for medium-running jobs
+  private final double mediumVcoresHeadroom;
+  // Aggregated virtual core headroom by class for long-running jobs
+  private final double longVcoresHeadroom;
+  // Aggregated memory headroom by class in MB
+  private final long memoryHeadroom;
+
   /**
-   * Type of each utilization record suggested by the clustering algorithm.
+   * Type of each utilization record suggested by the clustering algorithm
+   * in {periodic, constant, unpredictable}.
    */
   enum UtilizationRecordType {
     U_PERIODIC,
@@ -61,23 +61,27 @@ public class UtilizationRecord {
   }
 
   /**
-   * Type of each DAG by its duration
+   * Type of the job in terms of runtime duration in {short, medium, long},
+   * which determines our preference of environemnts.
    */
-  enum TaskType {
-    T_SHORT,
-    T_MEDIUM,
-    T_LONG
+  enum JobType {
+    T_JOB_SHORT,
+    T_JOB_MEDIUM,
+    T_JOB_LONG
   }
 
   /**
    * Constructor that directly takes pre-computed headrooms.
    *
-   * @param type Type of the given utilization record
-   * @param clusterNodeLabels All the node labels of the given record
-   * @param shortVcoresHeadroom Headroom in virtual cores for short jobs
-   * @param mediumVcoresHeadroom Headroom in virtual cores for medium jobs
-   * @param longVcoresHeadroom Headroom in virtual cores for long jobs
-   * @param memoryHeadroom Memory headroom in MB
+   * @param type Type of the given class of environments
+   * @param clusterNodeLabels All the node labels in the class of environments
+   * @param shortVcoresHeadroom Headroom in number of virtual cores for
+   *                            short-running jobs
+   * @param mediumVcoresHeadroom Headroom in number of virtual cores for
+   *                             medium-running jobs
+   * @param longVcoresHeadroom Headroom in number of virtual cores for
+   *                           long-running jobs
+   * @param memoryHeadroom Memory capacity headroom in MB
    */
   public UtilizationRecord(UtilizationRecordType type,
                            HashSet<String> clusterNodeLabels,
@@ -97,12 +101,15 @@ public class UtilizationRecord {
    * Constructor that directly takes pre-computed headrooms, as well as
    * the full utilization trace.
    *
-   * @param type Type of the given utilization record
-   * @param clusterNodeLabels All the node labels of the given record
-   * @param shortVcoresHeadroom Headroom in virtual cores for short jobs
-   * @param mediumVcoresHeadroom Headroom in virtual cores for medium jobs
-   * @param longVcoresHeadroom Headroom in virtual cores for long jobs
-   * @param memoryHeadroom Memory headroom in MB
+   * @param type Type of the given class of environments
+   * @param clusterNodeLabels All the node labels in the class of environments
+   * @param shortVcoresHeadroom Headroom in number of virtual cores for
+   *                            short-running jobs
+   * @param mediumVcoresHeadroom Headroom in number of virtual cores for
+   *                             medium-running jobs
+   * @param longVcoresHeadroom Headroom in number of virtual cores for
+   *                           long-running jobs
+   * @param memoryHeadroom Memory capacity headroom in MB
    * @param utilizationTrace The full utilization trace of the given record
    */
   public UtilizationRecord(UtilizationRecordType type,
@@ -120,49 +127,57 @@ public class UtilizationRecord {
   /**
    * Constructor that takes the raw data and computes the headrooms.
    *
-   * @param type Type of the given utilization record
-   * @param clusterNodeLabels All the node labels of the given record
-   * @param primaryUsedVcores The amount of virtual CPU primary tenants are
+   * @param type Type of the given class of environments
+   * @param clusterNodeLabels All the node labels in the class of environments
+   * @param primaryUsedVcores The number of virtual cores primary tenants are
    *                          using currently
-   * @param primaryUsedVcoresCeiled The ceiling of the virtual CPU usage by
+   * @param primaryUsedVcoresCeiled The ceiling of the virtual core usage by
    *                                primary tenants
-   * @param secondaryUsedVcores The number of virtual CPU used by secondary
+   * @param secondaryUsedVcores The number of virtual cores used by secondary
    *                            tenants currently
-   * @param availableVcores Number of available virtual CPUs
-   * @param primaryUsedMemoryInMB Memory used by primary tenants currently
-   * @param secondaryUsedMemoryInMB Memory used by secondary tenants currently
-   * @param availableMemoryInMB Amount of available memory
-   * @param maxUtilization The maximum utilization of the class
-   * @param avgUtilization The average utilization of the class
+   * @param availableVcores The number of available virtual cores
+   * @param primaryUsedMemoryInMB Memory capacity in MB used by primary tenants
+   *                              currently
+   * @param secondaryUsedMemoryInMB Memory capacity in MB used by secondary
+   *                                tenants currently
+   * @param availableMemoryInMB Available memory capacity in MB
+   * TODO: finalize these 2 with unicorn
+   * @param maxUtilization The maximum utilization of the primary and secondary
+   *                       tenants in percentage [0.0, 1.0]
+   * @param avgUtilization The average utilization of the primary and secondary
+   *                       tenants in percentage [0.0, 1.0]
    */
   public UtilizationRecord(UtilizationRecordType type,
                            HashSet<String> clusterNodeLabels,
                            double primaryUsedVcores,
-                           long primaryUsedVcoresCeiled,
-                           long secondaryUsedVcores,
-                           long availableVcores,
-                           long primaryUsedMemoryInMB,
-                           long secondaryUsedMemoryInMB,
-                           long availableMemoryInMB,
+                           int primaryUsedVcoresCeiled,
+                           int secondaryUsedVcores,
+                           int availableVcores,
+                           int primaryUsedMemoryInMB,
+                           int secondaryUsedMemoryInMB,
+                           int availableMemoryInMB,
                            double maxUtilization,
                            double avgUtilization) {
     this.type = type;
     this.clusterNodeLabels = clusterNodeLabels;
 
-    double vcoresCapacity = 
+    // Total capacity for virtual cores
+    int vcoresCapacity = 
         primaryUsedVcoresCeiled + secondaryUsedVcores + availableVcores;
-    // headroom_short = capacity - Current
-    this.shortVcoresHeadroom = vcoresCapacity *
-        (1.0 - (primaryUsedVcores + secondaryUsedVcores) / vcoresCapacity);
-    // headroom_medium = capacity - MAX(AVG, Current)
-    this.mediumVcoresHeadroom = vcoresCapacity *
-        (1.0 - Math.max(avgUtilization,
-                        (primaryUsedVcores + secondaryUsedVcores) / vcoresCapacity));
-    // headroom_long = capacity - MAX(PEAK, Current)
-    this.longVcoresHeadroom = vcoresCapacity *
-        (1.0 - Math.max(maxUtilization,
-                        (primaryUsedVcores + secondaryUsedVcores) / vcoresCapacity));
-    // headroom = current available memory (TODO: memory does not grow)
+    // Headroom(short) = capacity - Current
+    this.shortVcoresHeadroom = vcoresCapacity * (1.0 -
+        (primaryUsedVcores + secondaryUsedVcores) / (double) vcoresCapacity);
+    // Headroom(medium) = capacity - MAX(AVG, Current)
+    this.mediumVcoresHeadroom = vcoresCapacity * (1.0 - 
+        Math.max(avgUtilization,
+                 (primaryUsedVcores + secondaryUsedVcores) /
+                 (double) vcoresCapacity));
+    // Headroom(long) = capacity - MAX(PEAK, Current)
+    this.longVcoresHeadroom = vcoresCapacity * (1.0 -
+        Math.max(maxUtilization,
+                 (primaryUsedVcores + secondaryUsedVcores) /
+                 (double) vcoresCapacity));
+    // Headroom = current available memory
     this.memoryHeadroom = availableMemoryInMB;
   }
 
@@ -170,31 +185,36 @@ public class UtilizationRecord {
    * Constructor that takes the raw data and computes the headrooms, which also
    * requires the full trace of the utilization.
    *
-   * @param type Type of the given utilization record
-   * @param clusterNodeLabels All the node labels of the given record
-   * @param primaryUsedVcores The amount of virtual CPU primary tenants are
+   * @param type Type of the given class of environments
+   * @param clusterNodeLabels All the node labels in the class of environments
+   * @param primaryUsedVcores The number of virtual cores primary tenants are
    *                          using currently
-   * @param primaryUsedVcoresCeiled The ceiling of the virtual CPU usage by
+   * @param primaryUsedVcoresCeiled The ceiling of the virtual core usage by
    *                                primary tenants
-   * @param secondaryUsedVcores The number of virtual CPU used by secondary
+   * @param secondaryUsedVcores The number of virtual cores used by secondary
    *                            tenants currently
-   * @param availableVcores Number of available virtual CPUs
-   * @param primaryUsedMemoryInMB Memory used by primary tenants currently
-   * @param secondaryUsedMemoryInMB Memory used by secondary tenants currently
-   * @param availableMemoryInMB Amount of available memory
-   * @param maxUtilization The maximum utilization of the class
-   * @param avgUtilization The average utilization of the class
-   * @param utilizationTrace The full utilization trace
+   * @param availableVcores The number of available virtual cores
+   * @param primaryUsedMemoryInMB Memory capacity in MB used by primary tenants
+   *                              currently
+   * @param secondaryUsedMemoryInMB Memory capacity in MB used by secondary
+   *                                tenants currently
+   * @param availableMemoryInMB Available memory capacity in MB
+   * TODO: finalize these 2 with unicorn
+   * @param maxUtilization The maximum utilization of the primary and secondary
+   *                       tenants in percentage [0.0, 1.0]
+   * @param avgUtilization The average utilization of the primary and secondary
+   *                       tenants in percentage [0.0, 1.0]
+   * @param utilizationTrace The full utilization trace of the given record
    */
   public UtilizationRecord(UtilizationRecordType type,
                            HashSet<String> clusterNodeLabels,
                            double primaryUsedVcores,
-                           long primaryUsedVcoresCeiled,
-                           long secondaryUsedVcores,
-                           long availableVcores,
-                           long primaryUsedMemoryInMB,
-                           long secondaryUsedMemoryInMB,
-                           long availableMemoryInMB,
+                           int primaryUsedVcoresCeiled,
+                           int secondaryUsedVcores,
+                           int availableVcores,
+                           int primaryUsedMemoryInMB,
+                           int secondaryUsedMemoryInMB,
+                           int availableMemoryInMB,
                            double maxUtilization,
                            double avgUtilization,
                            TreeMap<Integer, Double> utilizationTrace) {
@@ -206,7 +226,8 @@ public class UtilizationRecord {
   }
 
   /**
-   * Get the type of the record in {periodic, constant, unpredictable}.
+   * Get the type of the given class of environemnts in
+   * {periodic, constant, unpredictable}.
    *
    * @return The type of the utilization record
    */
@@ -215,7 +236,7 @@ public class UtilizationRecord {
   }
 
   /**
-   * Getter function for the node labels.
+   * Get all the node labels in the given class of environments
    *
    * @return The node labels
    */
@@ -224,18 +245,18 @@ public class UtilizationRecord {
   }
   
   /**
-   * Get the amount of virtual CPU headroom.
+   * Get the virtual cores headroom in terms of number of virtual cores.
    *
-   * @param type The type of the task in terms of its duration
-   * @return The amount virtual CPU headroom
+   * @param type The type of the job regarding its runtime duration
+   * @return The amount virtual core headroom
    */
-  public double getVcoresHeadroom(TaskType type) {
+  public double getVcoresHeadroom(JobType type) {
     switch(type) {
-      case T_SHORT:
+      case T_JOB_SHORT:
         return this.shortVcoresHeadroom;
-      case T_MEDIUM:
+      case T_JOB_MEDIUM:
         return this.mediumVcoresHeadroom;
-      case T_LONG:
+      case T_JOB_LONG:
         return this.longVcoresHeadroom;
       default:
         LOG.error("Math is borken.");
@@ -244,7 +265,7 @@ public class UtilizationRecord {
   }
 
   /**
-   * Get the amount of memory headroom.
+   * Get the memory capacity headroom in MB.
    *
    * @return The amount of memory headroom in MB
    */
@@ -253,38 +274,39 @@ public class UtilizationRecord {
   }
 
   /**
-   * Getter function for the full utilization trace.
+   * Get the full utilization trace.
    *
-   * @return The full utilization trace
+   * @return The full utilization trace of the given record
    */
   public TreeMap<Integer, Double> getUtilizationTrace() {
     return this.utilizationTrace;
   }
 
   /**
-   * Check whether a given utilization class has enough headroom to execute a
-   * DAG.
+   * Check whether a given utilization class has enough headroom (both virtual
+   * cores and memory capacity) to execute a job.
    *
-   * @param requiredVcores The amount of virtual CPU required by the DAG
-   * @param requiredMemory The amount of memory required by the DAG
-   * @param type The type of the task in terms of its duration
-   * @return True if the DAG fits, otherwise false
+   * @param requiredVcores The amount of virtual cores required by the job
+   * @param requiredMemory The amount of memory capacity required by the job
+   * @param type The type of the task in terms of its runtime duration
+   * @return True if the job can fit in, otherwise false
    */
-  public boolean fits(long requiredVcores, long requiredMemory, TaskType type) {
+  public boolean fits(long requiredVcores, long requiredMemory, JobType type) {
     double vcoresHeadroom = getVcoresHeadroom(type);
     return ((requiredVcores <= vcoresHeadroom) &&
             (requiredMemory <= this.memoryHeadroom));
   }
 
   /**
-   * Calculate the maximum number of tasks that can fit in the remaining headroom.
+   * Calculate the maximum number of tasks that can fit in the remaining
+   * headroom (both virtual cores and memory capacity).
    *
-   * @param vcoresPerTask Number of virtual cores required by one single task
-   * @param memoryPerTask Amount of memory required by one single task
+   * @param vcoresPerTask Number of virtual cores required by each single task
+   * @param memoryPerTask Memory capacity required by each single task
    * @param type The type of the task in terms of its duration
    * @return The maximum number of tasks that can fit in
    */
-  public int floor(int vcoresPerTask, int memoryPerTask, TaskType type) {
+  public int floor(int vcoresPerTask, int memoryPerTask, JobType type) {
     double vcoresHeadroom = getVcoresHeadroom(type);
     int floorByVcores = (int) Math.floor(vcoresHeadroom / vcoresPerTask);
     int floorByMemory = (int) getMemoryHeadroom() / memoryPerTask;
