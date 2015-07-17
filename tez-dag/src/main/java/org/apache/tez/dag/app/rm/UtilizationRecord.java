@@ -259,7 +259,7 @@ public class UtilizationRecord {
       case T_JOB_LONG:
         return this.longVcoresHeadroom;
       default:
-        LOG.error("Math is borken.");
+        LOG.error("Math is broken.");
         return 0.0;
     }
   }

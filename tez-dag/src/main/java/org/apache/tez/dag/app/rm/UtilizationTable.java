@@ -39,6 +39,8 @@ public class UtilizationTable {
   private static final Logger LOG = LoggerFactory.getLogger(
       UtilizationTable.class);
 
+  private static final int NUM_OF_PREFERENCE_LEVELS = 3;
+
   // A generic random generator for probabilistic scheduling
   private Random randomGenerator;
   // The actual records organized as an array of records
@@ -115,7 +117,7 @@ public class UtilizationTable {
    * @param type The type of the job in terms of its runtime duration
    * @return the node labels of the cluster that gets randomly picked
    */
-  public ArrayList<Tuple<Double, HashSet<String>>> pickRandomCluster(
+  public ArrayList<Tuple<Double, HashSet<String>>> pickClassesByProbability(
                                                        int numOfTasks,
                                                        int vcoresPerTask,
                                                        int memoryPerTask,
@@ -148,79 +150,114 @@ public class UtilizationTable {
         break;
       default:
         // what?
-        LOG.error("Math is borken");
+        LOG.error("Math is broken");
         return null;
     }
 
     // Build one list of available containers for each preference (sorted from
     // high to low)
-    ArrayList<Tuple<Integer, Integer>>[] availableContainers = new ArrayList[3];
-    for (int i = 0; i < 3; i++) {
-      availableContainers[i] = new ArrayList<Tuple<Integer, Integer>>();
+    ArrayList<Tuple<Integer, UtilizationRecord>>[] availableContainers =
+        new ArrayList[NUM_OF_PREFERENCE_LEVELS];
+    for (int i = 0; i < NUM_OF_PREFERENCE_LEVELS; i++) {
+      availableContainers[i] =
+          new ArrayList<Tuple<Integer, UtilizationRecord>>();
     }
+
+    // Find the maximum number of containers available in a single class for
+    // best-fit bin packing
+    int maxNumOfAvailableContainers = 0;
 
     for (int i = 0; i < utilizationRecords.length; i++) {
       UtilizationRecord record = utilizationRecords[i];
       // Maximum number of containers can fit in
       int numOfContainers = record.floor(vcoresPerTask, memoryPerTask, type);
+      if (numOfContainers > maxNumOfAvailableContainers) {
+        maxNumOfAvailableContainers = numOfContainers;
+      }
 
       // High preference
       if (record.getType() == preferences[0]) {
         availableContainers[0].add(
-            new Tuple<Integer, Integer>(numOfContainers, i));
+            new Tuple<Integer, UtilizationRecord>(numOfContainers, record));
       // Medium preference
       } else if (record.getType() == preferences[1]) {
         availableContainers[1].add(
-            new Tuple<Integer, Integer>(numOfContainers, i));
+            new Tuple<Integer, UtilizationRecord>(numOfContainers, record));
       // Low preference
       } else if (record.getType() == preferences[2]) {
         availableContainers[2].add(
-            new Tuple<Integer, Integer>(numOfContainers, i));
+            new Tuple<Integer, UtilizationRecord>(numOfContainers, record));
       // What?
       } else {
-        LOG.error("Math is borken");
+        LOG.error("Math is broken");
         return null;
       }
     }
 
-    /**
-     * 1) There is at least one class can fit the entire job.
-     *   a. if probablistic type selection is enabled, we pick one class based
-     *      on the product of its capacity (i.e., headroom in terms of number
-     *      of containers) and the weights representing our preference.
-     *   b. if probablistic type selection is disabled, we pick one class as
-     *      soon as we can find at least one class from the most preferrable
-     *      classes (e.g., if we find 2 classes in the high preference list, we
-     *      will pick one out of the two without looking at medium and low
-     *      preference list).
-     *
-     * Note that the probability we pick each class will be proportional to its
-     * headroom when best-fit scheduling is disabled, and inversely proportional
-     * to the headroom when it is enabled.
-     */
+    // Try to search for a single class that can fit the entire job
+    ArrayList<Tuple<Double, HashSet<String>>> schedule =
+        searchForSingleClass(availableContainers, numOfTasks,
+                             maxNumOfAvailableContainers);
+    if (schedule != null) {
+      return schedule;
+    } else {
+      return searchForMultipleClasses(availableContainers, numOfTasks);
+    }
+  }
+
+
+  /**
+   * 1) There is at least one class can fit the entire job.
+   *   a. if probablistic type selection is enabled, we pick one class based
+   *      on the product of its capacity (i.e., headroom in terms of number
+   *      of containers) and the weights representing our preference.
+   *   b. if probablistic type selection is disabled, we pick one class as
+   *      soon as we can find at least one class from the most preferrable
+   *      classes (e.g., if we find 2 classes in the high preference list, we
+   *      will pick one out of the two without looking at medium and low
+   *      preference list).
+   *
+   * Note that the probability we pick each class will be proportional to its
+   * headroom when best-fit scheduling is disabled, and inversely proportional
+   * to the headroom when it is enabled.
+   */
+  private ArrayList<Tuple<Double, HashSet<String>>>
+  searchForSingleClass(
+      ArrayList<Tuple<Integer, UtilizationRecord>>[] availableContainers,
+      int numOfTasks, int maxNumOfAvailableContainers) {
     // List of classes that can fit the job, sorted from highest preference to
     // lowest
-    ArrayList<Tuple<Double, Integer>> fittedList =
-        new ArrayList<Tuple<Double, Integer>>();
+    ArrayList<Tuple<Double, UtilizationRecord>> fittedList =
+        new ArrayList<Tuple<Double, UtilizationRecord>>();
     double cumulativeNumOfContainers = 0.0;
 
+    // Increment maxNumOfContainers by one for normalization
+    maxNumOfAvailableContainers++;
+
     // Loop through preferences
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < NUM_OF_PREFERENCE_LEVELS; i++) {
 
       // Loop through classes have the same preference
       for (int j = 0; j < availableContainers[i].size(); j++) {
         int numOfAvailableContainers = availableContainers[i].get(j).getFirst();
-        int indexInRecords = availableContainers[i].get(j).getSecond();
+        UtilizationRecord record = availableContainers[i].get(j).getSecond();
 
         if (numOfAvailableContainers >= numOfTasks) {
           // Put the weighted tuple into the list, this works even if we are not
           // doing probabilistic type selection since we are just scaling things
           // with the same weight
-          double weightedNumOfContainers =
-              numOfAvailableContainers * preferenceWeights[i];
-          Tuple<Double, Integer> weightedTuple =
-              new Tuple<Double, Integer>(weightedNumOfContainers,
-                                         indexInRecords);
+          double weightedNumOfContainers;
+          if (bestFitScheduling) {
+            weightedNumOfContainers =
+                (maxNumOfAvailableContainers - numOfAvailableContainers) *
+                preferenceWeights[i];
+          } else {
+            weightedNumOfContainers =
+                numOfAvailableContainers * preferenceWeights[i];
+          }
+          Tuple<Double, UtilizationRecord> weightedTuple =
+              new Tuple<Double, UtilizationRecord>(weightedNumOfContainers,
+                                                   record);
           fittedList.add(weightedTuple);
           cumulativeNumOfContainers += weightedNumOfContainers;
         }
@@ -233,78 +270,84 @@ public class UtilizationTable {
        *  b. we have already iterated through all types
        */
       if (cumulativeNumOfContainers > 0.0 &&
-          ((!probabilisticTypeSelection) || i == 2)) {
+          ((!probabilisticTypeSelection) ||
+            i == NUM_OF_PREFERENCE_LEVELS - 1)) {
         int indexInList =
             selectSingleRecord(fittedList, cumulativeNumOfContainers);
-        int indexInRecords = fittedList.get(indexInList).getSecond();
+        UtilizationRecord record = fittedList.get(indexInList).getSecond();
 
         // Construct the scheduling decision, which only picks from one class
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
             new ArrayList<Tuple<Double, HashSet<String>>>();
         Tuple<Double, HashSet<String>> scheduleTuple =
-            new Tuple<Double, HashSet<String>>(
-                    1.0,
-                    utilizationRecords[indexInRecords].getClusterNodeLabels());
+            new Tuple<Double, HashSet<String>>(1.0,
+                                               record.getClusterNodeLabels());
         scheduleList.add(scheduleTuple);
         return scheduleList;
       }
     }
 
-    /**
-     * 2) There is at least one combination of classes can fit the job.
-     *   a. if probabilistic type selection is enabled, we pick from all classes
-     *      based on the product of its capacity (i.e., headroom in terms of
-     *      number of containers) and the weights representing our preference.
-     *   b. if probabilistic type selection is disabled, we pick from a subset
-     *      of classes as soon as we can find at least one combination from the
-     *      most preferrable classes (e.g., if we have found 2 classes in high
-     *      and medium preference list that can fit the job in combination, we
-     *      will not keep looking at low preference list).
-     *
-     * Note that the best-fit scheduling does not have any impact here.
-     */
+    return null;
+  }
+
+  /**
+   * We cannot find any class of environments that can fit our job in, so search
+   * for fit in combination of classes. (This corresponds to case 2 and 3)
+   */
+  private ArrayList<Tuple<Double, HashSet<String>>>
+  searchForMultipleClasses(
+      ArrayList<Tuple<Integer, UtilizationRecord>>[] availableContainers,
+      int numOfTasks) {
     // A list to keep track of the actual number of available containers
-    ArrayList<Tuple<Integer, Integer>> actualList =
-        new ArrayList<Tuple<Integer, Integer>>();
+    ArrayList<Tuple<Integer, UtilizationRecord>> actualList =
+        new ArrayList<Tuple<Integer, UtilizationRecord>>();
     // A list to keep track of the weighted number of available containers
-    ArrayList<Tuple<Double, Integer>> weightedList =
-        new ArrayList<Tuple<Double, Integer>>();
+    ArrayList<Tuple<Double, UtilizationRecord>> weightedList =
+        new ArrayList<Tuple<Double, UtilizationRecord>>();
     double actualCumulativeNumOfContainers = 0.0;
     double weightedCumulativeNumOfContainers = 0.0;
 
     // Loop through preferences
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < NUM_OF_PREFERENCE_LEVELS; i++) {
 
       // Loop through classes have the same preference
       for (int j = 0; j < availableContainers[i].size(); j++) {
         int actualNumOfContainers = availableContainers[i].get(j).getFirst();
         double weightedNumOfContainers =
             actualNumOfContainers * preferenceWeights[j];
-        int indexInRecords = availableContainers[i].get(j).getSecond();
+        UtilizationRecord record = availableContainers[i].get(j).getSecond();
 
         // actual number of containers
-        Tuple<Integer, Integer> actualTuple =
-            new Tuple<Integer, Integer>(actualNumOfContinaers,
-                                        indexInRecords);
+        Tuple<Integer, UtilizationRecord> actualTuple =
+            new Tuple<Integer, UtilizationRecord>(actualNumOfContainers,
+                                                  record);
         actualList.add(actualTuple);
         actualCumulativeNumOfContainers += actualNumOfContainers;
 
         // weighted number of containers
-        Tuple<Double, Integer> weightedTuple =
-            new Tuple<Double, Integer>(weightedNumOfContainers,
-                                       indexInRecords);
+        Tuple<Double, UtilizationRecord> weightedTuple =
+            new Tuple<Double, UtilizationRecord>(weightedNumOfContainers,
+                                                 record);
         weightedList.add(weightedTuple);
         weightedCumulativeNumOfContainers += weightedNumOfContainers;
       }
 
       /**
-       * Make scheduling decisions if we have at least one combination and
-       * either one of the following condition is true.
-       *  a. we are not doing probabilistic type selection
-       *  b. we have already iterated through all the types
+       * 2) There is at least one combination of classes can fit the job.
+       *   a. if probabilistic type selection is enabled, we pick from all
+       *      classes based on the product of its capacity (i.e., headroom in
+       *      terms of number of containers) and the weights representing our
+       *      preference.
+       *   b. if probabilistic type selection is disabled, we pick from a subset
+       *      of classes as soon as we can find at least one combination from
+       *      the most preferrable classes (e.g., if we have found 2 classes in
+       *      high and medium preference list that can fit the job in
+       *      combination, we will not keep looking at low preference list).
+       *
+       * Note that the best-fit scheduling does not have any impact here.
        */
       if (actualCumulativeNumOfContainers >= numOfTasks &&
-          (!probabilisticTypeSelection || i == 2)) {
+          (!probabilisticTypeSelection || i == NUM_OF_PREFERENCE_LEVELS - 1)) {
 
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
             new ArrayList<Tuple<Double, HashSet<String>>>();
@@ -317,7 +360,7 @@ public class UtilizationTable {
                                 weightedList,
                                 weightedCumulativeNumOfContainers);
           // Index in the original records
-          int indexInRecords = actualList.get(indexInList).getSecond();
+          UtilizationRecord record = actualList.get(indexInList).getSecond();
           // The acutal number of containers the class has
           int actualNumOfContainers = actualList.get(indexInList).getFirst();
           // The weighted number of containers the class has
@@ -336,9 +379,8 @@ public class UtilizationTable {
 
           // Create the tuple
           Tuple<Double, HashSet<String>> scheduleTuple =
-              new Tuple<Double, HashSet<String>>(
-                    scheduledCDF,
-                    utilizationRecords[indexInRecords].getClusterNodeLabels());
+              new Tuple<Double, HashSet<String>>(scheduledCDF,
+                                                 record.getClusterNodeLabels());
           scheduleList.add(scheduleTuple);
 
           // Update the actual and weighted lists
@@ -349,11 +391,12 @@ public class UtilizationTable {
 
         return scheduleList;
       /**
-       * Make scheduling decisions if we have iterated through all the classes
-       * but still cannot find even one combination that fits the job. In this
-       * case, we just pick one class probabilistically and queue for it.
+       * 3) Make scheduling decisions if we have iterated through all the
+       * classes but still cannot find even one combination that fits the job.
+       * In this case, we just pick one class probabilistically and queue for
+       * it.
        */
-      } else if (i == 2) {
+      } else if (i == NUM_OF_PREFERENCE_LEVELS - 1) {
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
             new ArrayList<Tuple<Double, HashSet<String>>>();
 
@@ -361,11 +404,11 @@ public class UtilizationTable {
         int indexInList = selectSingleRecord(
                               weightedList,
                               weightedCumulativeNumOfContainers);
-        int indexInRecords = actualList.get(indexInList).getSecond();
+        UtilizationRecord record = actualList.get(indexInList).getSecond();
         Tuple<Double, HashSet<String>> scheduleTuple =
             new Tuple<Double, HashSet<String>>(
                     1.0,
-                    utilizationRecords[indexInRecords].getClusterNodeLabels());
+                    record.getClusterNodeLabels());
         scheduleList.add(scheduleTuple);
 
         return scheduleList;
@@ -375,7 +418,7 @@ public class UtilizationTable {
       }
     }
 
-    LOG.error("Math is broken again");
+    LOG.error("Math is broken");
     return null;
   }
 
@@ -387,7 +430,7 @@ public class UtilizationTable {
    * @return The index of selected element in the ArrayList
    */
   private int selectSingleRecord(
-                  ArrayList<Tuple<Double, Integer>> containerList,
+                  ArrayList<Tuple<Double, UtilizationRecord>> containerList,
                   double cumulativeNumOfContainers) {
     // Build a CDF based on the numbers of available containers
     double[] containerCDF = new double[containerList.size()];

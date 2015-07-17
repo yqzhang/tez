@@ -32,7 +32,7 @@ import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest;
 
 import org.apache.tez.dag.app.AppContext;
 import org.apache.tez.dag.app.dag.TaskAttempt;
-import org.apache.tez.dag.app.rm.UtilizationRecord.TaskType;
+import org.apache.tez.dag.app.rm.UtilizationRecord.JobType;
 import org.apache.tez.dag.app.rm.UtilizationTable;
 import org.apache.tez.dag.app.rm.UtilizationTable.Tuple;
 import org.apache.tez.dag.app.rm.container.ContainerSignatureMatcher;
@@ -138,14 +138,14 @@ public class PrimaryTenantYarnTaskSchedulerService extends
                                                 bestFitScheduling);
 
         // TODO: Determine the type of the task
-        TaskType type = TaskType.T_JOB_LONG;
+        JobType type = JobType.T_JOB_LONG;
 
         // Make the scheduling decision
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
-            utilizationTable.pickRandomCluster(parallelism,
-                                               vcoresPerTask,
-                                               memoryPerTask,
-                                               type);
+            utilizationTable.pickClassesByProbability(parallelism,
+                                                      vcoresPerTask,
+                                                      memoryPerTask,
+                                                      type);
 
         // Build the CDF for future scheduling
         scheduleNodeLabelExpressions = new String[scheduleList.size()];
