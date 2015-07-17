@@ -18,7 +18,9 @@
 
 package org.apache.tez.dag.app.rm;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Random;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +32,9 @@ import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest;
 
 import org.apache.tez.dag.app.AppContext;
 import org.apache.tez.dag.app.dag.TaskAttempt;
+import org.apache.tez.dag.app.rm.UtilizationRecord.TaskType;
 import org.apache.tez.dag.app.rm.UtilizationTable;
+import org.apache.tez.dag.app.rm.UtilizationTable.Tuple;
 import org.apache.tez.dag.app.rm.container.ContainerSignatureMatcher;
 import org.apache.tez.dag.api.TezConfiguration;
 
@@ -42,22 +46,74 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   private static final Logger LOG = LoggerFactory.getLogger(
       PrimaryTenantYarnTaskSchedulerService.class);
 
-  private final UtilizationTable utilizationTable = new UtilizationTable();
+  private UtilizationTable utilizationTable = null;
+
+  // A generic random generator for probabilistic scheduling
+  private Random randomGenerator;
 
   // Whether we have already made scheduling decision for this DAG
-  private final String scheduledNodeLabelExpression;
-  private final int vcoresPerTask;
-  private final int memoryPerTask;
+  private String[] scheduleNodeLabelExpressions = null;
+  private double[] scheduleCDF;
+
+  // The smallest resource scheduling unit
+  private int vcoresPerTask;
+  private int memoryPerTask;
+
+  // Whether we want to enable scheduling decisions that will
+  // probabilistically pick from non-preferrable types of classes
+  private boolean probabilisticTypeSelection;
+  // Weight for the least preferrable class
+  private double lowPreferenceWeight;
+  // Weight for the medium preferrable class
+  private double mediumPreferenceWeight;
+  // Weight for the most preferrable class
+  private double highPreferenceWeight;
+
+  // Whether we want to enable scheduling decisions that prefer classes that
+  // have smallest residual capacity, which could reduce resource fragmentation
+  private boolean bestFitScheduling;
+
+  public PrimaryTenantYarnTaskSchedulerService(
+                        TaskSchedulerAppCallback appClient,
+                        ContainerSignatureMatcher containerSignatureMatcher,
+                        String appHostName,
+                        int appHostPort,
+                        String appTrackingUrl,
+                        AppContext appContext) {
+    super(appClient, containerSignatureMatcher, appHostName, appHostPort,
+          appTrackingUrl, appContext);
+    this.randomGenerator = new Random(System.currentTimeMillis());
+  }
 
   @Override
   public synchronized void serviceInit(Configuration conf) {
-    cpuVcorePerTask = conf.getInt(
+    vcoresPerTask = conf.getInt(
         TezConfiguration.TEZ_TASK_RESOURCE_CPU_VCORES,
         TezConfiguration.TEZ_TASK_RESOURCE_CPU_VCORES_DEFAULT);
 
-    memoryMbPerTask = conf.getInt(
+    memoryPerTask = conf.getInt(
         TezConfiguration.TEZ_TASK_RESOURCE_CPU_VCORES,
         TezConfiguration.TEZ_TASK_RESOURCE_MEMORY_MB_DEFAULT);
+
+    probabilisticTypeSelection = conf.getBoolean(
+        TezConfiguration.TEZ_PROBABILISTIC_TYPE_SELECTION,
+        TezConfiguration.TEZ_PROBABILISTIC_TYPE_SELECTION_DEFAULT);
+
+    lowPreferenceWeight = conf.getDouble(
+        TezConfiguration.TEZ_PROBABILISTIC_LOW_PREFERENCE_WEIGHT,
+        TezConfiguration.TEZ_PROBABILISTIC_LOW_PREFERENCE_WEIGHT_DEFAULT);
+
+    mediumPreferenceWeight = conf.getDouble(
+        TezConfiguration.TEZ_PROBABILISTIC_MEDIUM_PREFERENCE_WEIGHT,
+        TezConfiguration.TEZ_PROBABILISTIC_MEDIUM_PREFERENCE_WEIGHT_DEFAULT);
+
+    highPreferenceWeight = conf.getDouble(
+        TezConfiguration.TEZ_PROBABILISTIC_HIGH_PREFERENCE_WEIGHT,
+        TezConfiguration.TEZ_PROBABILISTIC_HIGH_PREFERENCE_WEIGHT_DEFAULT);
+
+    bestFitScheduling = conf.getBoolean(
+        TezConfiguration.TEZ_BEST_FIT_SCHEDULING,
+        TezConfiguration.TEZ_BEST_FIT_SCHEDULING_DEFAULT);
 
     super.serviceInit(conf);
   }
@@ -67,24 +123,43 @@ public class PrimaryTenantYarnTaskSchedulerService extends
                            String[] hosts, String[] racks,
                            Priority priority, Object containerSignature,
                            Object clientCookie) {
-    synchronized (scheduledNodeLabelExpression) {
-      if (scheduledNodeLabelExpression == null) {
-        // 1. filter out the classes that do not have enough headroom
+    synchronized (scheduleNodeLabelExpressions) {
+      if (scheduleNodeLabelExpressions == null) {
         TaskAttempt attemp = (TaskAttempt) task;
         int parallelism = attemp.getVertex().getTotalTasks();
-        // in case of overflow
-        long totalVcores = vcoresPerTask * parallalism;
-        long totalMemory = memoryPerTask * parallalism;
 
-        // 2. sort classes by headroom
-        // 3. randomly pick one based on headroom
+        utilizationTable = new UtilizationTable(probabilisticTypeSelection,
+                                                lowPreferenceWeight,
+                                                mediumPreferenceWeight,
+                                                highPreferenceWeight,
+                                                bestFitScheduling);
+
+        // TODO: determine the type of the task
+        TaskType type = TaskType.T_LONG;
+
+        ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
+            utilizationTable.pickRandomCluster(parallelism,
+                                               vcoresPerTask,
+                                               memoryPerTask,
+                                               type);
+
+        scheduleNodeLabelExpressions = new String[scheduleList.size()];
+        for (int i = 0; i < scheduleList.size(); i++) {
+          scheduleCDF[i] = scheduleList.get(i).getFirst();
+          scheduleNodeLabelExpressions[i] = 
+            "(" + Joiner.on("|").join(scheduleList.get(i).getSecond()) + ")";
+        }
       }
     }
 
+    double rand = this.randomGenerator.nextDouble();
+    int nodeLabelExpressionIndex = UtilizationTable.lowerBound(scheduleCDF, rand);
+    String nodeLabelExpression =
+        scheduleNodeLabelExpressions[nodeLabelExpressionIndex];
+
     CRCookie cookie = new CRCookie(task, clientCookie, containerSignature);
     CookieContainerRequest request = new CookieContainerRequest(
-        capability, hosts, racks, priority, scheduledNodeLabelExpression,
-        cookie);
+        capability, hosts, racks, priority, nodeLabelExpression, cookie);
 
     super.addRequestAndTrigger(task, request, hosts, racks);
   }

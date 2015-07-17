@@ -1059,6 +1059,55 @@ public class TezConfiguration extends Configuration {
   public static final boolean TEZ_PRIMARY_TENANT_DEFAULT = false;
 
   /**
+   *  Boolean value. Enable probabilistic selection across utilization types.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_PROBABILISTIC_TYPE_SELECTION =
+    TEZ_PREFIX + "probabilistic.type.selection";
+
+  public static final boolean TEZ_PROBABILISTIC_TYPE_SELECTION_DEFAULT = false;
+
+  /**
+   *  Double value. The weight for the least preferrable type
+   *  (only useful when probabilistic selection is enabled).
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_PROBABILISTIC_LOW_PREFERENCE_WEIGHT =
+    TEZ_PREFIX + "probabilistic.low.weight";
+
+  public static final double TEZ_PROBABILISTIC_LOW_PREFERENCE_WEIGHT_DEFAULT = 1.0;
+
+  /**
+   *  Double value. The weight for the medium preferrable type
+   *  (only useful when probabilistic selection is enabled).
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_PROBABILISTIC_MEDIUM_PREFERENCE_WEIGHT =
+    TEZ_PREFIX + "probabilistic.medium.weight";
+
+  public static final double TEZ_PROBABILISTIC_MEDIUM_PREFERENCE_WEIGHT_DEFAULT = 2.0;
+
+  /**
+   *  Double value. The weight for the most preferrable type
+   *  (only useful when probabilistic selection is enabled).
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_PROBABILISTIC_HIGH_PREFERENCE_WEIGHT =
+    TEZ_PREFIX + "probabilistic.high.weight";
+
+  public static final double TEZ_PROBABILISTIC_HIGH_PREFERENCE_WEIGHT_DEFAULT = 4.0;
+
+  /**
+   *  Boolean value. Enable best fit for scheduling. It tries to find the smallest
+   *  bin for a given DAG, which will prevent the system from highly fragmented resource.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_BEST_FIT_SCHEDULING =
+    TEZ_PREFIX + "best.fit.scheduling";
+
+  public static final boolean TEZ_BEST_FIT_SCHEDULING_DEFAULT = false;
+
+  /**
    *  Tez AM Inline Mode flag. Not valid till Tez-684 get checked-in
    */
   @Private
