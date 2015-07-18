@@ -1316,7 +1316,7 @@ public class TestTaskAttempt {
     boolean inputFailedReported = false;
     
     @Override
-    protected Vertex getVertex() {
+    public Vertex getVertex() {
       return mockVertex;
     }
 

@@ -29,6 +29,8 @@ import org.apache.tez.dag.app.rm.UtilizationRecord.UtilizationRecordType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.annotations.VisibleForTesting;
+
 /**
  * A class for storing all classes of utilization records, where each record
  * represents a class of environments that behave similarly as suggested by the
@@ -314,7 +316,7 @@ public class UtilizationTable {
       for (int j = 0; j < availableContainers[i].size(); j++) {
         int actualNumOfContainers = availableContainers[i].get(j).getFirst();
         double weightedNumOfContainers =
-            actualNumOfContainers * preferenceWeights[j];
+            actualNumOfContainers * preferenceWeights[i];
         UtilizationRecord record = availableContainers[i].get(j).getSecond();
 
         // actual number of containers
@@ -412,9 +414,6 @@ public class UtilizationTable {
         scheduleList.add(scheduleTuple);
 
         return scheduleList;
-      } else {
-        LOG.error("Math is broken");
-        return null;
       }
     }
 
@@ -441,7 +440,7 @@ public class UtilizationTable {
           containerList.get(i).getFirst() / cumulativeNumOfContainers;
     }
     // Since it is an CDF
-    assert containerCDF[containerCDF.length - 1] == 1.0;
+    containerCDF[containerCDF.length - 1] = 1.0;
 
     // Randomly pick one
     double rand = this.randomGenerator.nextDouble();
@@ -471,6 +470,11 @@ public class UtilizationTable {
     }
 
     return high;
+  }
+
+  @VisibleForTesting
+  protected void setUtilizationRecords(UtilizationRecord[] utilizationRecords) {
+    this.utilizationRecords = utilizationRecords;
   }
 
   /**
