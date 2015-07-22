@@ -472,8 +472,7 @@ public class UtilizationTable {
     return high;
   }
 
-  @VisibleForTesting
-  protected void setUtilizationRecords(UtilizationRecord[] utilizationRecords) {
+  public void setUtilizationRecords(UtilizationRecord[] utilizationRecords) {
     this.utilizationRecords = utilizationRecords;
   }
 
