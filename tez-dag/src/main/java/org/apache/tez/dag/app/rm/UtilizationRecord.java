@@ -54,7 +54,7 @@ public class UtilizationRecord {
    * Type of each utilization record suggested by the clustering algorithm
    * in {periodic, constant, unpredictable}.
    */
-  enum UtilizationRecordType {
+  public enum UtilizationRecordType {
     U_PERIODIC,
     U_CONSTANT,
     U_UNPREDICTABLE
@@ -64,7 +64,7 @@ public class UtilizationRecord {
    * Type of the job in terms of runtime duration in {short, medium, long},
    * which determines our preference of environemnts.
    */
-  enum JobType {
+  public enum JobType {
     T_JOB_SHORT,
     T_JOB_MEDIUM,
     T_JOB_LONG
