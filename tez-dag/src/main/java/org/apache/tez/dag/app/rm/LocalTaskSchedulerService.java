@@ -213,6 +213,7 @@ public class LocalTaskSchedulerService extends TaskSchedulerService {
           nodeId,
           nodeHttpAddress,
           capability,
+          null,
           priority,
           null);
 

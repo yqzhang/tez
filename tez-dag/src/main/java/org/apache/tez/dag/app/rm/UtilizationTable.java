@@ -18,9 +18,18 @@
 
 package org.apache.tez.dag.app.rm;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Random;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.yarn.api.UtilizationProtocol;
+import org.apache.hadoop.yarn.api.protocolrecords.GetUtilizationRequest;
+import org.apache.hadoop.yarn.api.protocolrecords.GetUtilizationResponse;
+import org.apache.hadoop.yarn.client.ClientRMProxy;
+import org.apache.hadoop.yarn.exceptions.YarnException;
+import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 
 import org.apache.tez.dag.app.rm.UtilizationRecord;
 import org.apache.tez.dag.app.rm.UtilizationRecord.JobType;
@@ -43,6 +52,8 @@ public class UtilizationTable {
 
   private static final int NUM_OF_PREFERENCE_LEVELS = 3;
 
+  // Proxy for updating utilization data
+  private UtilizationProtocol proxy;
   // A generic random generator for probabilistic scheduling
   private Random randomGenerator;
   // The actual records organized as an array of records
@@ -77,7 +88,8 @@ public class UtilizationTable {
                           double lowPreferenceWeight,
                           double mediumPreferenceWeight,
                           double highPreferenceWeight,
-                          boolean bestFitScheduling) {
+                          boolean bestFitScheduling,
+                          Configuration conf) {
     // Seed the random generator by time
     this.randomGenerator = new Random(System.currentTimeMillis());
 
@@ -97,12 +109,38 @@ public class UtilizationTable {
     // In case we want to reduce resource fragmentation by using best-fit
     // bin packing
     this.bestFitScheduling = bestFitScheduling;
+
+    // Create the proxy
+    this.proxy = createUtilizationProtocolProxy(conf);
   }
 
   /**
-   * TODO: A function that communicates to update all the utilization records.
+   * A function that creates the protocol proxy to communicate with Unicorn
+   *
+   * @return The created protocol proxy
    */
-  public void updateUtilization() { }
+  protected UtilizationProtocol createUtilizationProtocolProxy(
+      Configuration conf) throws YarnRuntimeException {
+    try {
+      return ClientRMProxy.createRMProxy(conf, UtilizationProtocol.class);
+    } catch (IOException e) {
+      throw new YarnRuntimeException(e);
+    }
+  }
+
+  /**
+   * A function that communicates to update all the utilization records.
+   */
+  public void updateUtilization() {
+    GetUtilizationRequest request = GetUtilizationRequest.newInstance();
+    try {
+      GetUtilizationResponse response = proxy.getUtilization(request);
+    } catch (YarnException e) {
+      LOG.error("Yarn Exception while updating utilization", e);
+    } catch (IOException e) {
+      LOG.error("IO Exception while updating utilization", e);
+    }
+  }
 
   /**
    * Pick class(es) of environments that can best fulfill the resource demand

@@ -115,6 +115,14 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         TezConfiguration.TEZ_BEST_FIT_SCHEDULING,
         TezConfiguration.TEZ_BEST_FIT_SCHEDULING_DEFAULT);
 
+    // Build the utilization table
+    utilizationTable = new UtilizationTable(probabilisticTypeSelection,
+                                            lowPreferenceWeight,
+                                            mediumPreferenceWeight,
+                                            highPreferenceWeight,
+                                            bestFitScheduling,
+                                            conf);
+
     super.serviceInit(conf);
   }
 
@@ -129,13 +137,6 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         // Estimate the number of tasks for the given job
         TaskAttempt attemp = (TaskAttempt) task;
         int parallelism = attemp.getVertex().getTotalTasks();
-
-        // Build the utilization table
-        utilizationTable = new UtilizationTable(probabilisticTypeSelection,
-                                                lowPreferenceWeight,
-                                                mediumPreferenceWeight,
-                                                highPreferenceWeight,
-                                                bestFitScheduling);
 
         // TODO: Determine the type of the task
         JobType type = JobType.T_JOB_LONG;
