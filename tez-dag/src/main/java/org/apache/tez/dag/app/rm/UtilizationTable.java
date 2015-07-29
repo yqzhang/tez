@@ -174,7 +174,6 @@ public class UtilizationTable {
             UtilizationRecordType.U_CONSTANT};
         break;
       case T_JOB_MEDIUM:
-        // TODO: not sure whether this is the best, but give periodic some love
         // medium jobs: periodic > constant > unpredictable
         preferences = new UtilizationRecordType[] {
             UtilizationRecordType.U_PERIODIC,
@@ -433,22 +432,17 @@ public class UtilizationTable {
       /**
        * 3) Make scheduling decisions if we have iterated through all the
        * classes but still cannot find even one combination that fits the job.
-       * In this case, we just pick one class probabilistically and queue for
-       * it.
+       * In this case, we fall back to the default scheduling, which is not
+       * picking any class.
        */
       } else if (i == NUM_OF_PREFERENCE_LEVELS - 1) {
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
             new ArrayList<Tuple<Double, HashSet<String>>>();
 
-        // Wait for one single class based on probability
-        int indexInList = selectSingleRecord(
-                              weightedList,
-                              weightedCumulativeNumOfContainers);
-        UtilizationRecord record = actualList.get(indexInList).getSecond();
         Tuple<Double, HashSet<String>> scheduleTuple =
             new Tuple<Double, HashSet<String>>(
                     1.0,
-                    record.getClusterNodeLabels());
+                    new HashSet<String>());
         scheduleList.add(scheduleTuple);
 
         return scheduleList;
