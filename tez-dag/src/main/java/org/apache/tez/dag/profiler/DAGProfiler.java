@@ -21,6 +21,7 @@ package org.apache.tez.dag.profiler;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.System;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.Set;
@@ -58,6 +59,10 @@ public class DAGProfiler {
   private int longestCriticalPath;
   private int numOfEntryTasks;
 
+  // Start and finish time of the DAG
+  private long starttime;
+  private long finishtime;
+
   // All the entry vertices
   private LinkedList<String> entryVertices;
   // Children vertices indexed by parent vertex
@@ -76,11 +81,13 @@ public class DAGProfiler {
     this.dagName = dagName;
 
     this.vertexPlans = dagPlan.getVertexList();
+    this.vertices = new HashMap<String, Integer>();
     this.edges = new HashMap<String, Edge>();
     this.entryVertices = new LinkedList<String>();
     this.children = new HashMap<String, Set<String>>();
     this.taskDuration = new HashMap<String, LinkedList<Double>>();
     this.longestCriticalPath = INF;
+    this.numOfEntryTasks = INF;
 
     this.dagProfilingEnabled = conf.getBoolean(
         TezConfiguration.TEZ_DAG_PROFILING_ENABLED,
@@ -88,6 +95,8 @@ public class DAGProfiler {
     this.dagProfilingDir = conf.get(
         TezConfiguration.TEZ_DAG_PROFILING_DIR,
         TezConfiguration.TEZ_DAG_PROFILING_DIR_DEFAULT);
+
+    constructDAG();
   }
 
   protected class Edge {
@@ -158,8 +167,8 @@ public class DAGProfiler {
     // compute the critical path
     setLongestCriticalPath();
 
-    // compute the number of tasks in entry vertices
-    setNumOfEntryTasks();
+    // mark the starttime
+    this.starttime = System.currentTimeMillis();
   }
 
   public int getLongestCriticalPath() {
@@ -177,10 +186,18 @@ public class DAGProfiler {
   }
 
   public int getNumOfEntryTasks() {
+    // compute the number of tasks in entry vertices
+    if (this.numOfEntryTasks == INF) {
+      setNumOfEntryTasks();
+    }
     return this.numOfEntryTasks;
   }
 
   public void setNumOfEntryTasks() {
+    if (this.appContext.getCurrentDAG() == null) {
+      LOG.info("Current DAG is NULL");
+      return ;
+    }
     this.numOfEntryTasks = 0;
     for (String vertex : this.entryVertices) {
       this.numOfEntryTasks +=
@@ -190,8 +207,8 @@ public class DAGProfiler {
 
   public int computeLongestCriticalPath(String vertex) {
     if (!children.containsKey(vertex)) {
-      this.vertices.put(vertex, 0);
-      return 0;
+      this.vertices.put(vertex, 1);
+      return 1;
     } else if (this.vertices.get(vertex) == INF) {
       for (String child : children.get(vertex)) {
         int distance = computeLongestCriticalPath(child) + 1;
@@ -208,13 +225,16 @@ public class DAGProfiler {
       this.taskDuration.put(vertexName, new LinkedList<Double>());
     }
     this.taskDuration.get(vertexName).add((double) duration / MSEC_TO_SEC);
+    // mark finish time
+    this.finishtime = System.currentTimeMillis();
   }
 
   public void finish() {
     /**
      * Structure of the log.
      * dagName
-     * longestCriticalPath
+     * totalDuration
+     * longestCriticalPath, numOfEntryVertices, numOfEntryTasks
      * numOfVertices
      * vertexName, numOfTasks, avgTaskDuration
      * ...
@@ -232,13 +252,20 @@ public class DAGProfiler {
           profileDir.mkdirs();
         }
         // create the file
-        String fileName = profileDir + this.dagName + ".profile";
+        String fileName = profileDir.getAbsolutePath() + "/" +
+            this.dagName + ".profile";
         FileWriter writer = new FileWriter(fileName);
 
         // dagName
         writer.write(this.dagName + "\n");
-        // longestCriticalPath
-        writer.write(this.longestCriticalPath + "\n");
+        // totalDuration
+        double totalDuration =
+            (double) (this.finishtime - this.starttime) / MSEC_TO_SEC;
+        writer.write(totalDuration + "\n");
+        // longestCriticalPath, numOfEntryVertices, numOfEntryTasks
+        writer.write(this.longestCriticalPath + "," +
+                     this.entryVertices.size() + "," +
+                     getNumOfEntryTasks() + "\n");
         // numOfVertices
         writer.write(this.vertices.size() + "\n");
         // vertexName, numOfTasks, avgTaskDuration

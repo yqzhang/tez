@@ -52,6 +52,7 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   private Random randomGenerator;
 
   // Whether we have already made scheduling decision for this DAG
+  private Boolean hasMadeSchedule = false;
   private String[] scheduleNodeLabelExpressions = null;
   private double[] scheduleCDF;
 
@@ -145,8 +146,8 @@ public class PrimaryTenantYarnTaskSchedulerService extends
                            Priority priority, Object containerSignature,
                            Object clientCookie) {
 
-    synchronized (scheduleNodeLabelExpressions) {
-      if (scheduleNodeLabelExpressions == null) {
+    synchronized (this.hasMadeSchedule) {
+      if (!this.hasMadeSchedule) {
         // Estimate the number of tasks for the given job
         TaskAttempt attemp = (TaskAttempt) task;
 
@@ -155,6 +156,9 @@ public class PrimaryTenantYarnTaskSchedulerService extends
             this.appContext.getCurrentDAG().getProfiler().getLongestCriticalPath();
         int parallelism =
             this.appContext.getCurrentDAG().getProfiler().getNumOfEntryTasks();
+
+        LOG.info("Longest Critical Path: " + longestCriticalPath +
+                 ", Number of Entry Tasks: " + parallelism);
 
         // Determine the type of the task
         JobType type;
@@ -181,6 +185,7 @@ public class PrimaryTenantYarnTaskSchedulerService extends
           scheduleNodeLabelExpressions[i] = 
             "(" + Joiner.on("|").join(scheduleList.get(i).getSecond()) + ")";
         }
+        this.hasMadeSchedule = true;
       }
     }
 
