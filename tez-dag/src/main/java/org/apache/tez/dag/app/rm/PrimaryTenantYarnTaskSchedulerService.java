@@ -69,6 +69,11 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   // Weight for the most preferrable class
   private double highPreferenceWeight;
 
+  // threshold of critical path length between short and medium jobs
+  private int thresholdShortAndMedium;
+  // threshold of critical path length between medium and long jobs
+  private int thresholdMediumAndLong;
+
   // Whether we want to enable scheduling decisions that prefer classes that
   // have smallest residual capacity, which could reduce resource fragmentation
   private boolean bestFitScheduling;
@@ -87,33 +92,41 @@ public class PrimaryTenantYarnTaskSchedulerService extends
 
   @Override
   public synchronized void serviceInit(Configuration conf) {
-    vcoresPerTask = conf.getInt(
+    this.vcoresPerTask = conf.getInt(
         TezConfiguration.TEZ_TASK_RESOURCE_CPU_VCORES,
         TezConfiguration.TEZ_TASK_RESOURCE_CPU_VCORES_DEFAULT);
 
-    memoryPerTask = conf.getInt(
+    this.memoryPerTask = conf.getInt(
         TezConfiguration.TEZ_TASK_RESOURCE_CPU_VCORES,
         TezConfiguration.TEZ_TASK_RESOURCE_MEMORY_MB_DEFAULT);
 
-    probabilisticTypeSelection = conf.getBoolean(
+    this.probabilisticTypeSelection = conf.getBoolean(
         TezConfiguration.TEZ_PROBABILISTIC_TYPE_SELECTION,
         TezConfiguration.TEZ_PROBABILISTIC_TYPE_SELECTION_DEFAULT);
 
-    lowPreferenceWeight = conf.getDouble(
+    this.lowPreferenceWeight = conf.getDouble(
         TezConfiguration.TEZ_PROBABILISTIC_LOW_PREFERENCE_WEIGHT,
         TezConfiguration.TEZ_PROBABILISTIC_LOW_PREFERENCE_WEIGHT_DEFAULT);
 
-    mediumPreferenceWeight = conf.getDouble(
+    this.mediumPreferenceWeight = conf.getDouble(
         TezConfiguration.TEZ_PROBABILISTIC_MEDIUM_PREFERENCE_WEIGHT,
         TezConfiguration.TEZ_PROBABILISTIC_MEDIUM_PREFERENCE_WEIGHT_DEFAULT);
 
-    highPreferenceWeight = conf.getDouble(
+    this.highPreferenceWeight = conf.getDouble(
         TezConfiguration.TEZ_PROBABILISTIC_HIGH_PREFERENCE_WEIGHT,
         TezConfiguration.TEZ_PROBABILISTIC_HIGH_PREFERENCE_WEIGHT_DEFAULT);
 
-    bestFitScheduling = conf.getBoolean(
+    this.bestFitScheduling = conf.getBoolean(
         TezConfiguration.TEZ_BEST_FIT_SCHEDULING,
         TezConfiguration.TEZ_BEST_FIT_SCHEDULING_DEFAULT);
+
+    this.thresholdShortAndMedium = conf.getInt(
+        TezConfiguration.TEZ_THRESHOLD_SHORT_AND_MEDIUM,
+        TezConfiguration.TEZ_THRESHOLD_SHORT_AND_MEDIUM_DEFAULT);
+
+    this.thresholdMediumAndLong = conf.getInt(
+        TezConfiguration.TEZ_THRESHOLD_MEDIUM_AND_LONG,
+        TezConfiguration.TEZ_THRESHOLD_MEDIUM_AND_LONG_DEFAULT);
 
     // Build the utilization table
     utilizationTable = new UtilizationTable(probabilisticTypeSelection,
@@ -136,10 +149,22 @@ public class PrimaryTenantYarnTaskSchedulerService extends
       if (scheduleNodeLabelExpressions == null) {
         // Estimate the number of tasks for the given job
         TaskAttempt attemp = (TaskAttempt) task;
-        int parallelism = attemp.getVertex().getTotalTasks();
 
-        // TODO: Determine the type of the task
-        JobType type = JobType.T_JOB_LONG;
+        // Get the corresponding information from DAG profiling
+        int longestCriticalPath =
+            this.appContext.getCurrentDAG().getProfiler().getLongestCriticalPath();
+        int parallelism =
+            this.appContext.getCurrentDAG().getProfiler().getNumOfEntryTasks();
+
+        // Determine the type of the task
+        JobType type;
+        if (longestCriticalPath < this.thresholdShortAndMedium) {
+          type = JobType.T_JOB_SHORT;
+        } else if (longestCriticalPath < this.thresholdMediumAndLong) {
+          type = JobType.T_JOB_MEDIUM;
+        } else {
+          type = JobType.T_JOB_MEDIUM;
+        }
 
         // Make the scheduling decision
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
@@ -152,7 +177,7 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         scheduleNodeLabelExpressions = new String[scheduleList.size()];
         for (int i = 0; i < scheduleList.size(); i++) {
           scheduleCDF[i] = scheduleList.get(i).getFirst();
-          // Node labels
+          // TODO: Node labels
           scheduleNodeLabelExpressions[i] = 
             "(" + Joiner.on("|").join(scheduleList.get(i).getSecond()) + ")";
         }

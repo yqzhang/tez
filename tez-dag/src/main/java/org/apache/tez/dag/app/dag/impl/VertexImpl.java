@@ -4325,6 +4325,21 @@ public class VertexImpl implements org.apache.tez.dag.app.dag.Vertex, EventHandl
       case TASK_ATTEMPT_COMPLETED_EVENT:
         {
           checkEventSourceMetadata(this, sourceMeta);
+
+          // yunqi: log the task duration here
+          if (this.appContext.getCurrentDAG() != null) {
+            String vertexName = this.getName();
+            TezTaskID tezTId = sourceMeta.getTaskAttemptID().getTaskID();
+
+            long attemptStartTime = this.appContext.getCurrentDAG().getVertex(vertexName)
+                .getTask(tezTId).getAttempt(sourceMeta.getTaskAttemptID()).getLaunchTime();
+            long attemptFinishTime = System.currentTimeMillis();
+            long duration = attemptFinishTime - attemptStartTime;
+
+            this.appContext.getCurrentDAG().getProfiler().finishTask(vertexName, duration);
+          }
+          // yunqi: log the task duration here
+
           getEventHandler().handle(
               new TaskAttemptEvent(sourceMeta.getTaskAttemptID(), TaskAttemptEventType.TA_DONE));
         }

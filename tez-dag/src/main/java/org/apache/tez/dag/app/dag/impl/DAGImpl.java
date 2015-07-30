@@ -119,6 +119,7 @@ import org.apache.tez.dag.history.events.DAGInitializedEvent;
 import org.apache.tez.dag.history.events.DAGStartedEvent;
 import org.apache.tez.dag.history.events.VertexGroupCommitFinishedEvent;
 import org.apache.tez.dag.history.events.VertexGroupCommitStartedEvent;
+import org.apache.tez.dag.profiler.DAGProfiler;
 import org.apache.tez.dag.records.TezDAGID;
 import org.apache.tez.dag.records.TezTaskAttemptID;
 import org.apache.tez.dag.records.TezTaskID;
@@ -171,6 +172,8 @@ public class DAGImpl implements org.apache.tez.dag.app.dag.DAG,
 
   @VisibleForTesting
   DAGScheduler dagScheduler;
+
+  DAGProfiler dagProfiler;
 
   private final EventHandler eventHandler;
   // TODO Metrics
@@ -508,6 +511,8 @@ public class DAGImpl implements org.apache.tez.dag.app.dag.DAG,
     this.userName = appUserName;
     this.clock = clock;
     this.appContext = appContext;
+    this.dagProfiler = new DAGProfiler(this.appContext, this.jobPlan, this.dagName,
+                                       this.dagConf);
 
     this.taskAttemptListener = taskAttemptListener;
     this.taskHeartbeatHandler = thh;
@@ -1307,6 +1312,8 @@ public class DAGImpl implements org.apache.tez.dag.app.dag.DAG,
     }
 
     LOG.info("DAG: " + getID() + " finished with state: " + finalState);
+
+    dagProfiler.finish();
 
     return finalState;
   }
@@ -2220,6 +2227,11 @@ public class DAGImpl implements org.apache.tez.dag.app.dag.DAG,
     } finally {
       readLock.unlock();
     }
+  }
+
+  @Override
+  public DAGProfiler getProfiler() {
+    return this.dagProfiler;
   }
 
   // output of either vertex or vertex group

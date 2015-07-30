@@ -1108,6 +1108,44 @@ public class TezConfiguration extends Configuration {
   public static final boolean TEZ_BEST_FIT_SCHEDULING_DEFAULT = false;
 
   /**
+   *  Int value. The threshold between short and medium jobs in terms of the length of
+   *  the critical path.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_THRESHOLD_SHORT_AND_MEDIUM =
+    TEZ_PREFIX + "threshold.short.and.medium";
+
+  public static final int TEZ_THRESHOLD_SHORT_AND_MEDIUM_DEFAULT = 3;
+
+  /**
+   *  Int value. The threshold between medium and long jobs in terms of the length of
+   *  the critical path.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_THRESHOLD_MEDIUM_AND_LONG =
+    TEZ_PREFIX + "threshold.medium.and.long";
+
+  public static final int TEZ_THRESHOLD_MEDIUM_AND_LONG_DEFAULT = 6;
+
+  /**
+   *  Boolean value. Enable DAG profiling.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_DAG_PROFILING_ENABLED =
+    TEZ_PREFIX + "dag.profiling.enabled";
+
+  public static final boolean TEZ_DAG_PROFILING_ENABLED_DEFAULT = false;
+
+  /**
+   *  String value. Directory for storing the DAG profiles.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_DAG_PROFILING_DIR =
+    TEZ_PREFIX + "dag.profiling.dir";
+
+  public static final String TEZ_DAG_PROFILING_DIR_DEFAULT = "D:/data/dag_profiles/";
+
+  /**
    *  Tez AM Inline Mode flag. Not valid till Tez-684 get checked-in
    */
   @Private
