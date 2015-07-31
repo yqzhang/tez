@@ -253,7 +253,7 @@ public class DAGProfiler {
         }
         // create the file
         String fileName = profileDir.getAbsolutePath() + "/" +
-            this.dagName + ".profile";
+            this.dagName.replace(":", "_") + ".profile";
         FileWriter writer = new FileWriter(fileName);
 
         // dagName
