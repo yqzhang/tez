@@ -603,6 +603,7 @@ public class TaskImpl implements Task, EventHandler<TaskEvent> {
               recoveredAttempt) == null, taskAttemptStartedEvent.getTaskAttemptID() + " already existed.");
           this.taskAttemptStatus.put(taskAttemptStartedEvent.getTaskAttemptID().getId(), false);
           this.recoveredState = TaskState.RUNNING;
+
           return recoveredState;
         }
         case TASK_ATTEMPT_FINISHED:
@@ -977,6 +978,11 @@ public class TaskImpl implements Task, EventHandler<TaskEvent> {
   protected void logJobHistoryTaskStartedEvent() {
     TaskStartedEvent startEvt = new TaskStartedEvent(taskId,
         getVertex().getName(), scheduledTime, getLaunchTime());
+
+    // yunqi: log task attemp start
+    this.appContext.getCurrentDAG().getProfiler().startTaskAttempt();
+    // yunqi: log task attemp start
+
     this.appContext.getHistoryHandler().handle(
         new DAGHistoryEvent(taskId.getVertexID().getDAGId(), startEvt));
   }
@@ -988,6 +994,11 @@ public class TaskImpl implements Task, EventHandler<TaskEvent> {
         getVertex().getName(), getLaunchTime(), clock.getTime(),
         successfulAttempt,
         TaskState.SUCCEEDED, "", getCounters(), failedAttempts);
+
+    // yunqi: log task attemp finish
+    this.appContext.getCurrentDAG().getProfiler().finishTaskAttempt();
+    // yunqi: log task attemp finish
+
     this.appContext.getHistoryHandler().handle(
         new DAGHistoryEvent(taskId.getVertexID().getDAGId(), finishEvt));
   }

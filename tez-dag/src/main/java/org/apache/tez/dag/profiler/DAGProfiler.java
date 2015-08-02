@@ -63,6 +63,10 @@ public class DAGProfiler {
   private long starttime;
   private long finishtime;
 
+  // Number of tasks running simultaneously
+  private int currentNumOfTasksRunning;
+  private int maximumNumOfTasksRunning;
+
   // All the entry vertices
   private LinkedList<String> entryVertices;
   // Children vertices indexed by parent vertex
@@ -88,6 +92,8 @@ public class DAGProfiler {
     this.taskDuration = new HashMap<String, LinkedList<Double>>();
     this.longestCriticalPath = INF;
     this.numOfEntryTasks = INF;
+    this.currentNumOfTasksRunning = 0;
+    this.maximumNumOfTasksRunning = 0;
 
     this.dagProfilingEnabled = conf.getBoolean(
         TezConfiguration.TEZ_DAG_PROFILING_ENABLED,
@@ -229,11 +235,26 @@ public class DAGProfiler {
     this.finishtime = System.currentTimeMillis();
   }
 
+  public void startTaskAttempt() {
+    this.currentNumOfTasksRunning++;
+    if (this.currentNumOfTasksRunning > this.maximumNumOfTasksRunning) {
+      this.maximumNumOfTasksRunning = this.currentNumOfTasksRunning;
+    }
+  }
+
+  public void finishTaskAttempt() {
+    this.currentNumOfTasksRunning--;
+    if (this.currentNumOfTasksRunning < 0) {
+      this.currentNumOfTasksRunning = 0;
+    }
+  }
+
   public void finish() {
     /**
      * Structure of the log.
      * dagName
      * totalDuration
+     * maximumNumOfTasksRunning
      * longestCriticalPath, numOfEntryVertices, numOfEntryTasks
      * numOfVertices
      * vertexName, numOfTasks, avgTaskDuration
@@ -262,6 +283,8 @@ public class DAGProfiler {
         double totalDuration =
             (double) (this.finishtime - this.starttime) / MSEC_TO_SEC;
         writer.write(totalDuration + "\n");
+        // maximumNumOfTasksRunning
+        writer.write(this.maximumNumOfTasksRunning + "\n");
         // longestCriticalPath, numOfEntryVertices, numOfEntryTasks
         writer.write(this.longestCriticalPath + "," +
                      this.entryVertices.size() + "," +
