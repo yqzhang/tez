@@ -178,12 +178,17 @@ public class PrimaryTenantYarnTaskSchedulerService extends
                                                       type);
 
         // Build the CDF for future scheduling
+        scheduleCDF = new double[scheduleList.size()];
         scheduleNodeLabelExpressions = new String[scheduleList.size()];
         for (int i = 0; i < scheduleList.size(); i++) {
           scheduleCDF[i] = scheduleList.get(i).getFirst();
-          // TODO: Node labels
-          scheduleNodeLabelExpressions[i] = 
-            "(" + Joiner.on("|").join(scheduleList.get(i).getSecond()) + ")";
+          if (scheduleList.get(i).getSecond().size() == 0) {
+            scheduleNodeLabelExpressions[i] = "*";
+          } else {
+            // TODO: Node labels
+            scheduleNodeLabelExpressions[i] = 
+              Joiner.on(" OR ").join(scheduleList.get(i).getSecond());
+          }
         }
         this.hasMadeSchedule = true;
       }
@@ -194,6 +199,8 @@ public class PrimaryTenantYarnTaskSchedulerService extends
     int nodeLabelExpressionIndex = UtilizationTable.lowerBound(scheduleCDF, rand);
     String nodeLabelExpression =
         scheduleNodeLabelExpressions[nodeLabelExpressionIndex];
+
+    LOG.info("Node label expression: " + nodeLabelExpression);
 
     CRCookie cookie = new CRCookie(task, clientCookie, containerSignature);
     CookieContainerRequest request = new CookieContainerRequest(

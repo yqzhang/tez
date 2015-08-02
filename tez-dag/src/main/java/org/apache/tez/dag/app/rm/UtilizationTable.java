@@ -21,12 +21,15 @@ package org.apache.tez.dag.app.rm;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.api.UtilizationProtocol;
 import org.apache.hadoop.yarn.api.protocolrecords.GetUtilizationRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.GetUtilizationResponse;
+import org.apache.hadoop.yarn.api.records.ClassLabelRecord;
+import org.apache.hadoop.yarn.api.records.UnicornUtilizationRecordType;
 import org.apache.hadoop.yarn.client.ClientRMProxy;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
@@ -135,6 +138,29 @@ public class UtilizationTable {
     GetUtilizationRequest request = GetUtilizationRequest.newInstance();
     try {
       GetUtilizationResponse response = proxy.getUtilization(request);
+      // parse the utilization response
+      List<ClassLabelRecord> records = response.getClassLabelRecord();
+      this.utilizationRecords = new UtilizationRecord[records.size()];
+      for (int i = 0; i < records.size(); i++) {
+        ClassLabelRecord record = records.get(i);
+        UtilizationRecordType type = UtilizationRecordType.U_UNPREDICTABLE;
+        if (record.getType() == UnicornUtilizationRecordType.T_PERIODIC) {
+          type = UtilizationRecordType.U_PERIODIC;
+        } else if (record.getType() == UnicornUtilizationRecordType.T_CONSTANT) {
+          type = UtilizationRecordType.U_CONSTANT;
+        } else if (record.getType() == UnicornUtilizationRecordType.T_UNPREDICTABLE) {
+          type = UtilizationRecordType.U_UNPREDICTABLE;
+        } else {
+          LOG.warn("Unsupported utilization record type.");
+        }
+        this.utilizationRecords[i] =
+            new UtilizationRecord(type,
+                                  new HashSet<String>(record.getNodeLabels()),
+                                  (double) record.getShortVcoresHeadroom(),
+                                  (double) record.getMediumVcoresHeadroom(),
+                                  (double) record.getLongVcoresHeadroom(),
+                                  record.getMemoryHeadroom());
+      }
     } catch (YarnException e) {
       LOG.error("Yarn Exception while updating utilization", e);
     } catch (IOException e) {
@@ -205,6 +231,19 @@ public class UtilizationTable {
     // Find the maximum number of containers available in a single class for
     // best-fit bin packing
     int maxNumOfAvailableContainers = 0;
+
+    // In case we do not have unicorn in place
+    if (utilizationRecords == null) {
+      LOG.warn("No utilization records can be found.");
+      ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
+          new ArrayList<Tuple<Double, HashSet<String>>>();
+      Tuple<Double, HashSet<String>> scheduleTuple =
+          new Tuple<Double, HashSet<String>>(
+                  1.0,
+                  new HashSet<String>());
+      scheduleList.add(scheduleTuple);
+      return scheduleList;
+    }
 
     for (int i = 0; i < utilizationRecords.length; i++) {
       UtilizationRecord record = utilizationRecords[i];
