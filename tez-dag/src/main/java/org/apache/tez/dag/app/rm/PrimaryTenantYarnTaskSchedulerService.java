@@ -157,20 +157,30 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         int parallelism =
             this.appContext.getCurrentDAG().getProfiler().getNumOfEntryTasks();
 
-        LOG.info("Longest Critical Path: " + longestCriticalPath +
-                 ", Number of Entry Tasks: " + parallelism);
-
         // Determine the type of the task
         JobType type;
         if (longestCriticalPath < this.thresholdShortAndMedium) {
           type = JobType.T_JOB_SHORT;
+
+          LOG.info("Job Longest Critical Path: " + longestCriticalPath +
+                   ", Number of Entry Tasks: " + parallelism +
+                   ", Job Type: SHORT.");
         } else if (longestCriticalPath < this.thresholdMediumAndLong) {
           type = JobType.T_JOB_MEDIUM;
+
+          LOG.info("Job Longest Critical Path: " + longestCriticalPath +
+                   ", Number of Entry Tasks: " + parallelism +
+                   ", Job Type: MEDIUM.");
         } else {
-          type = JobType.T_JOB_MEDIUM;
+          type = JobType.T_JOB_LONG;
+
+          LOG.info("Job Longest Critical Path: " + longestCriticalPath +
+                   ", Number of Entry Tasks: " + parallelism +
+                   ", Job Type: LONG.");
         }
 
         // Make the scheduling decision
+        utilizationTable.updateUtilization();
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
             utilizationTable.pickClassesByProbability(parallelism,
                                                       vcoresPerTask,
@@ -182,21 +192,31 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         scheduleNodeLabelExpressions = new String[scheduleList.size()];
         for (int i = 0; i < scheduleList.size(); i++) {
           scheduleCDF[i] = scheduleList.get(i).getFirst();
+          // Put node label expression as ANY
           if (scheduleList.get(i).getSecond().size() == 0) {
             scheduleNodeLabelExpressions[i] = "*";
+          // Join the labels with "|"
           } else {
-            // TODO: Node labels
             scheduleNodeLabelExpressions[i] = 
-              Joiner.on(" OR ").join(scheduleList.get(i).getSecond());
+              Joiner.on("|").join(scheduleList.get(i).getSecond());
           }
         }
+
+        LOG.info("Scheduling decision has been made:");
+        for (int i = 0; i < this.scheduleCDF.length; i++) {
+          LOG.info(" * CDF: " + this.scheduleCDF[i] +
+                   ", node labe expression: " +
+                   this.scheduleNodeLabelExpressions[i]);
+        }
+
         this.hasMadeSchedule = true;
       }
     }
 
     // Pick a class of environments based on probability
     double rand = this.randomGenerator.nextDouble();
-    int nodeLabelExpressionIndex = UtilizationTable.lowerBound(scheduleCDF, rand);
+    int nodeLabelExpressionIndex = UtilizationTable.lowerBound(scheduleCDF,
+                                                               rand);
     String nodeLabelExpression =
         scheduleNodeLabelExpressions[nodeLabelExpressionIndex];
 

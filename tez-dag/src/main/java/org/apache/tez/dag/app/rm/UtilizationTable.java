@@ -146,13 +146,38 @@ public class UtilizationTable {
         UtilizationRecordType type = UtilizationRecordType.U_UNPREDICTABLE;
         if (record.getType() == UnicornUtilizationRecordType.T_PERIODIC) {
           type = UtilizationRecordType.U_PERIODIC;
+
+          LOG.info(" * Class: " + record.getNodeLabels() + 
+                   ", Type: periodic, ShortVcores: " +
+                   record.getShortVcoresHeadroom() + ", MediumVcores: " +
+                   record.getMediumVcoresHeadroom() + ", LongVcores: " +
+                   record.getLongVcoresHeadroom() + ", Memory: " +
+                   record.getMemoryHeadroom());
+
         } else if (record.getType() == UnicornUtilizationRecordType.T_CONSTANT) {
           type = UtilizationRecordType.U_CONSTANT;
+
+          LOG.info(" * Class: " + record.getNodeLabels() + 
+                   ", Type: constant, ShortVcores: " +
+                   record.getShortVcoresHeadroom() + ", MediumVcores: " +
+                   record.getMediumVcoresHeadroom() + ", LongVcores: " +
+                   record.getLongVcoresHeadroom() + ", Memory: " +
+                   record.getMemoryHeadroom());
+
         } else if (record.getType() == UnicornUtilizationRecordType.T_UNPREDICTABLE) {
           type = UtilizationRecordType.U_UNPREDICTABLE;
+
+          LOG.info(" * Class: " + record.getNodeLabels() + 
+                   ", Type: periodic, ShortVcores: " +
+                   record.getShortVcoresHeadroom() + ", MediumVcores: " +
+                   record.getMediumVcoresHeadroom() + ", LongVcores: " +
+                   record.getLongVcoresHeadroom() + ", Memory: " +
+                   record.getMemoryHeadroom());
+
         } else {
           LOG.warn("Unsupported utilization record type.");
         }
+
         this.utilizationRecords[i] =
             new UtilizationRecord(type,
                                   new HashSet<String>(record.getNodeLabels()),
