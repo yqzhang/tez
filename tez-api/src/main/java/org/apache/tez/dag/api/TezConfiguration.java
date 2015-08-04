@@ -1115,7 +1115,7 @@ public class TezConfiguration extends Configuration {
   public static final String TEZ_THRESHOLD_SHORT_AND_MEDIUM =
     TEZ_PREFIX + "threshold.short.and.medium";
 
-  public static final int TEZ_THRESHOLD_SHORT_AND_MEDIUM_DEFAULT = 3;
+  public static final double TEZ_THRESHOLD_SHORT_AND_MEDIUM_DEFAULT = 300.0;
 
   /**
    *  Int value. The threshold between medium and long jobs in terms of the length of
@@ -1125,7 +1125,26 @@ public class TezConfiguration extends Configuration {
   public static final String TEZ_THRESHOLD_MEDIUM_AND_LONG =
     TEZ_PREFIX + "threshold.medium.and.long";
 
-  public static final int TEZ_THRESHOLD_MEDIUM_AND_LONG_DEFAULT = 6;
+  public static final double TEZ_THRESHOLD_MEDIUM_AND_LONG_DEFAULT = 600.0;
+
+  /**
+   *  Boolean value. Whether to enable scheduling guided by historical execution
+   *  of the DAGs.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_DAG_EXECUTION_HISTORY_ENABLED =
+    TEZ_PREFIX + "dag.execution.history.enabled";
+
+  public static final boolean TEZ_DAG_EXECUTION_HISTORY_ENABLED_DEFAULT = false;
+
+  /**
+   *  String value. The path to the DAG execution history file.
+   */
+  @ConfigurationScope(Scope.AM)
+  public static final String TEZ_DAG_EXECUTION_HISTORY_PATH =
+    TEZ_PREFIX + "dag.execution.history.path";
+
+  public static final String TEZ_DAG_EXECUTION_HISTORY_PATH_DEFAULT = "D:/data/job_history.json";
 
   /**
    *  Boolean value. Enable DAG profiling.

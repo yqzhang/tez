@@ -22,11 +22,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.System;
+import java.util.Arrays;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.HashMap;
 
 import org.slf4j.Logger;
@@ -39,6 +41,8 @@ import org.apache.tez.dag.app.AppContext;
 import org.apache.tez.dag.api.records.DAGProtos.DAGPlan;
 import org.apache.tez.dag.api.records.DAGProtos.VertexPlan;
 import org.apache.tez.dag.api.TezUncheckedException;
+
+import com.google.common.base.Joiner;
 
 public class DAGProfiler {
 
@@ -247,6 +251,45 @@ public class DAGProfiler {
     if (this.currentNumOfTasksRunning < 0) {
       this.currentNumOfTasksRunning = 0;
     }
+  }
+
+  public String getJobHash() {
+    // vertex
+    String[] vertexNames = new String[this.vertices.size()];
+    int i = 0;
+    for (String vertexName : this.vertices.keySet()) {
+      vertexNames[i] = vertexName;
+      i++;
+    }
+    Arrays.sort(vertexNames);
+
+    // edge
+    String[] edgeNames = new String[this.edges.size()];
+    i = 0;
+    for (Edge edge : this.edges.values()) {
+      edgeNames[i] = edge.getFromVertex() + "-" + edge.getToVertex();
+      i++;
+    }
+    Arrays.sort(edgeNames);
+
+    return Joiner.on(",").join(vertexNames) + "," + Joiner.on(",").join(edgeNames);
+  }
+
+  public int getMaximumConcurrentTasks() {
+    int[] numberOfTasksByLevel = new int[getLongestCriticalPath()];
+    for (Entry<String, Integer> entry : this.vertices.entrySet()) {
+      String vertexName = entry.getKey();
+      int vertexLevel = entry.getValue();
+      numberOfTasksByLevel[vertexLevel - 1] +=
+          this.appContext.getCurrentDAG().getVertex(vertexName).getTotalTasks();
+    }
+    int maxNumberOfConcurrentTasks = 0;
+    for (int i = 0; i < getLongestCriticalPath(); i++) {
+      if (numberOfTasksByLevel[i] > maxNumberOfConcurrentTasks) {
+        maxNumberOfConcurrentTasks = numberOfTasksByLevel[i];
+      }
+    }
+    return maxNumberOfConcurrentTasks;
   }
 
   public void finish() {

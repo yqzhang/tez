@@ -18,9 +18,16 @@
 
 package org.apache.tez.dag.app.rm;
 
+import java.io.IOException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Random;
+
+import org.json.JSONObject;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +44,8 @@ import org.apache.tez.dag.app.rm.UtilizationTable;
 import org.apache.tez.dag.app.rm.UtilizationTable.Tuple;
 import org.apache.tez.dag.app.rm.container.ContainerSignatureMatcher;
 import org.apache.tez.dag.api.TezConfiguration;
+
+import org.apache.commons.io.IOUtils;
 
 import com.google.common.base.Joiner;
 
@@ -71,13 +80,18 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   private double highPreferenceWeight;
 
   // threshold of critical path length between short and medium jobs
-  private int thresholdShortAndMedium;
+  private double thresholdShortAndMedium;
   // threshold of critical path length between medium and long jobs
-  private int thresholdMediumAndLong;
+  private double thresholdMediumAndLong;
 
   // Whether we want to enable scheduling decisions that prefer classes that
   // have smallest residual capacity, which could reduce resource fragmentation
   private boolean bestFitScheduling;
+
+  // Whether to enable scheduling decisions based on historical executions
+  private boolean dagExecutionHistoryEnabled;
+  private String dagExecutionHistoryPath;
+  private JSONObject dagExecutionHistory;
 
   public PrimaryTenantYarnTaskSchedulerService(
                         TaskSchedulerAppCallback appClient,
@@ -121,13 +135,21 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         TezConfiguration.TEZ_BEST_FIT_SCHEDULING,
         TezConfiguration.TEZ_BEST_FIT_SCHEDULING_DEFAULT);
 
-    this.thresholdShortAndMedium = conf.getInt(
+    this.thresholdShortAndMedium = conf.getDouble(
         TezConfiguration.TEZ_THRESHOLD_SHORT_AND_MEDIUM,
         TezConfiguration.TEZ_THRESHOLD_SHORT_AND_MEDIUM_DEFAULT);
 
-    this.thresholdMediumAndLong = conf.getInt(
+    this.thresholdMediumAndLong = conf.getDouble(
         TezConfiguration.TEZ_THRESHOLD_MEDIUM_AND_LONG,
         TezConfiguration.TEZ_THRESHOLD_MEDIUM_AND_LONG_DEFAULT);
+
+    this.dagExecutionHistoryEnabled = conf.getBoolean(
+        TezConfiguration.TEZ_DAG_EXECUTION_HISTORY_ENABLED,
+        TezConfiguration.TEZ_DAG_EXECUTION_HISTORY_ENABLED_DEFAULT);
+
+    this.dagExecutionHistoryPath = conf.get(
+        TezConfiguration.TEZ_DAG_EXECUTION_HISTORY_PATH,
+        TezConfiguration.TEZ_DAG_EXECUTION_HISTORY_PATH_DEFAULT);
 
     // Build the utilization table
     utilizationTable = new UtilizationTable(probabilisticTypeSelection,
@@ -136,6 +158,29 @@ public class PrimaryTenantYarnTaskSchedulerService extends
                                             highPreferenceWeight,
                                             bestFitScheduling,
                                             conf);
+    // Build the historical execution database
+    if (this.dagExecutionHistoryEnabled) {
+      File historyProfile = new File(this.dagExecutionHistoryPath);
+      if (historyProfile.exists() && !historyProfile.isDirectory()) {
+        try {
+          InputStream is = new FileInputStream(historyProfile);
+          String jsonText = IOUtils.toString(is);
+          this.dagExecutionHistory = new JSONObject(jsonText);
+        } catch (FileNotFoundException e) {
+          LOG.warn("Can not find the specified history profile: " +
+                   historyProfile);
+          this.dagExecutionHistoryEnabled = false;
+        } catch (IOException e) {
+          LOG.warn("Error reading the specified history profile: " +
+                   historyProfile);
+          this.dagExecutionHistoryEnabled = false;
+        }
+      } else {
+        LOG.warn("Specified DAG execution history profile does not exist: " +
+                 historyProfile);
+        this.dagExecutionHistoryEnabled = false;
+      }
+    }
 
     super.serviceInit(conf);
   }
@@ -152,37 +197,46 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         TaskAttempt attemp = (TaskAttempt) task;
 
         // Get the corresponding information from DAG profiling
-        int longestCriticalPath =
-            this.appContext.getCurrentDAG().getProfiler().getLongestCriticalPath();
-        int parallelism =
-            this.appContext.getCurrentDAG().getProfiler().getNumOfEntryTasks();
+        int maximumConcurrentTasks =
+            this.appContext.getCurrentDAG().getProfiler().getMaximumConcurrentTasks();
+        String jobHash =
+            this.appContext.getCurrentDAG().getProfiler().getJobHash();
 
         // Determine the type of the task
-        JobType type;
-        if (longestCriticalPath < this.thresholdShortAndMedium) {
-          type = JobType.T_JOB_SHORT;
+        JobType type = JobType.T_JOB_MEDIUM;
+        if (this.dagExecutionHistoryEnabled) {
+          LOG.info("Incoming job hash: " + jobHash);
+          if (this.dagExecutionHistory.has(jobHash)) {
+            double totalDuration = this.dagExecutionHistory.getDouble(jobHash);
 
-          LOG.info("Job Longest Critical Path: " + longestCriticalPath +
-                   ", Number of Entry Tasks: " + parallelism +
-                   ", Job Type: SHORT.");
-        } else if (longestCriticalPath < this.thresholdMediumAndLong) {
-          type = JobType.T_JOB_MEDIUM;
+            if (totalDuration < this.thresholdShortAndMedium) {
+              type = JobType.T_JOB_SHORT;
 
-          LOG.info("Job Longest Critical Path: " + longestCriticalPath +
-                   ", Number of Entry Tasks: " + parallelism +
-                   ", Job Type: MEDIUM.");
-        } else {
-          type = JobType.T_JOB_LONG;
+              LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
+                       ", DAG History Execution: " + totalDuration +
+                       ", Job Type: SHORT.");
+            } else if (totalDuration < this.thresholdMediumAndLong) {
+              type = JobType.T_JOB_MEDIUM;
 
-          LOG.info("Job Longest Critical Path: " + longestCriticalPath +
-                   ", Number of Entry Tasks: " + parallelism +
-                   ", Job Type: LONG.");
+              LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
+                       ", DAG History Execution: " + totalDuration+
+                       ", Job Type: MEDIUM.");
+            } else {
+              type = JobType.T_JOB_LONG;
+
+              LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
+                       ", DAG History Execution: " + totalDuration +
+                       ", Job Type: LONG.");
+            }
+          } else {
+            LOG.warn("Wait, how come we have not seen this job before?!");
+          }
         }
 
         // Make the scheduling decision
         utilizationTable.updateUtilization();
         ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
-            utilizationTable.pickClassesByProbability(parallelism,
+            utilizationTable.pickClassesByProbability(maximumConcurrentTasks,
                                                       vcoresPerTask,
                                                       memoryPerTask,
                                                       type);
