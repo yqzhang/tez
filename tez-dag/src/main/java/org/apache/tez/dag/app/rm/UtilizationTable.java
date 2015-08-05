@@ -168,7 +168,7 @@ public class UtilizationTable {
           type = UtilizationRecordType.U_UNPREDICTABLE;
 
           LOG.info(" * Class: " + record.getNodeLabels() + 
-                   ", Type: periodic, ShortVcores: " +
+                   ", Type: unpredictable, ShortVcores: " +
                    record.getShortVcoresHeadroom() + ", MediumVcores: " +
                    record.getMediumVcoresHeadroom() + ", LongVcores: " +
                    record.getLongVcoresHeadroom() + ", Memory: " +

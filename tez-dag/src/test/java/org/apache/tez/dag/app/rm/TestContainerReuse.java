@@ -1378,7 +1378,7 @@ public class TestContainerReuse {
         id);
     NodeId nodeID = NodeId.newInstance(host, 0);
     Container container = Container.newInstance(containerID, nodeID, host + ":0",
-        resource, priority, null);
+        resource, null, priority, null);
     return container;
   }
 

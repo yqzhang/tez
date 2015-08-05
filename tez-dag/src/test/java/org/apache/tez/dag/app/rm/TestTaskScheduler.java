@@ -1717,7 +1717,7 @@ public class TestTaskScheduler {
         id);
     NodeId nodeID = NodeId.newInstance(host, 0);
     Container container = Container.newInstance(containerID, nodeID, host
-        + ":0", resource, priority, null);
+        + ":0", resource, null, priority, null);
     return container;
   }
 }

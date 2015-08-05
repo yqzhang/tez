@@ -63,7 +63,7 @@ public class TestAMContainerMap {
   private Container mockContainer(ContainerId containerId) {
     NodeId nodeId = NodeId.newInstance("localhost", 43255);
     Container container = Container.newInstance(containerId, nodeId, "localhost:33333",
-        Resource.newInstance(1024, 1), Priority.newInstance(1), mock(Token.class));
+        Resource.newInstance(1024, 1), null, Priority.newInstance(1), mock(Token.class));
     return container;
   }
 }

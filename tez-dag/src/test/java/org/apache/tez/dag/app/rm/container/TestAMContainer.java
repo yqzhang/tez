@@ -1196,7 +1196,7 @@ public class TestAMContainer {
       resource = Resource.newInstance(1024, 1);
       priority = Priority.newInstance(1);
       container = Container.newInstance(containerID, nodeID,
-          nodeHttpAddress, resource, priority, null);
+          nodeHttpAddress, resource, null, priority, null);
 
       chh = mock(ContainerHeartbeatHandler.class);
 

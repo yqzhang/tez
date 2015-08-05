@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 
+import org.apache.hadoop.conf.Configuration;
+
 import org.apache.tez.dag.app.rm.UtilizationTable;
 import org.apache.tez.dag.app.rm.UtilizationTable.Tuple;
 import org.apache.tez.dag.app.rm.UtilizationRecord;
@@ -81,7 +83,8 @@ public class TestUtilizationTable {
     UtilizationRecord[] records = getUtilizationRecordsForTest();
 
     // start with probabilistic type selection disabled, and best-fit disabled
-    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, false);
+    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, false,
+                                                  null);
     table.setUtilizationRecords(records);
     // job can fits in a single class
     HashSet<String> possibleLabels =
@@ -119,7 +122,8 @@ public class TestUtilizationTable {
     UtilizationRecord[] records = getUtilizationRecordsForTest();
 
     // start with probabilistic type selection disabled, and best-fit enabled
-    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, true);
+    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, true,
+                                                  null);
     table.setUtilizationRecords(records);
     // job can fits in a single class
     HashSet<String> possibleLabels =
@@ -162,7 +166,7 @@ public class TestUtilizationTable {
     // try probabilistic type selection enabled, and best-fit disabled
     UtilizationTable table = new UtilizationTable(true, lowWeight,
                                                   mediumWeight,
-                                                  highWeight, false);
+                                                  highWeight, false, null);
     table.setUtilizationRecords(records);
 
     // set the counters
@@ -220,7 +224,7 @@ public class TestUtilizationTable {
     // try probabilistic type selection enabled, and best-fit enabled 
     UtilizationTable table = new UtilizationTable(true, lowWeight,
                                                   mediumWeight,
-                                                  highWeight, true);
+                                                  highWeight, true, null);
     table.setUtilizationRecords(records);
 
     // set the counters
@@ -272,7 +276,8 @@ public class TestUtilizationTable {
     UtilizationRecord[] records = getUtilizationRecordsForTest();
 
     // start with probabilistic type selection disabled, and best-fit disabled
-    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, false);
+    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, false,
+                                                  null);
     table.setUtilizationRecords(records);
     // job can fits in a single class
     HashSet<String> possibleLabels =
@@ -347,7 +352,7 @@ public class TestUtilizationTable {
 
     // start with probabilistic type selection disabled, and best-fit disabled
     UtilizationTable table = new UtilizationTable(true, lowWeight, mediumWeight,
-                                                  highWeight, false);
+                                                  highWeight, false, null);
     table.setUtilizationRecords(records);
     // job can fits in a single class
     HashSet<String> possibleLabels =
@@ -456,7 +461,8 @@ public class TestUtilizationTable {
     UtilizationRecord[] records = getUtilizationRecordsForTest();
 
     // start with probabilistic type selection disabled, and best-fit disabled
-    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, false);
+    UtilizationTable table = new UtilizationTable(false, 1.0, 1.0, 1.0, false,
+                                                  null);
     table.setUtilizationRecords(records);
     // job can fits in a single class
     HashSet<String> possibleLabels =
@@ -527,7 +533,7 @@ public class TestUtilizationTable {
     // start with probabilistic type selection disabled, and best-fit disabled
     UtilizationTable table = new UtilizationTable(true, lowWeight,
                                                   mediumWeight, highWeight,
-                                                  false);
+                                                  false, null);
     table.setUtilizationRecords(records);
     // job can fits in a single class
     HashSet<String> possibleLabels =

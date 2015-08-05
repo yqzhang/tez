@@ -21,13 +21,14 @@ package org.apache.tez.dag.app.rm;
 import java.io.IOException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.io.FileNotFoundException;
-import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Map.Entry;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Random;
-
-import org.json.JSONObject;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,10 @@ import org.apache.tez.dag.api.TezConfiguration;
 import org.apache.commons.io.IOUtils;
 
 import com.google.common.base.Joiner;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.stream.JsonReader;
 
 public class PrimaryTenantYarnTaskSchedulerService extends
                  YarnTaskSchedulerService {
@@ -91,7 +96,7 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   // Whether to enable scheduling decisions based on historical executions
   private boolean dagExecutionHistoryEnabled;
   private String dagExecutionHistoryPath;
-  private JSONObject dagExecutionHistory;
+  private HashMap<String, Double> dagExecutionHistory;
 
   public PrimaryTenantYarnTaskSchedulerService(
                         TaskSchedulerAppCallback appClient,
@@ -103,6 +108,7 @@ public class PrimaryTenantYarnTaskSchedulerService extends
     super(appClient, containerSignatureMatcher, appHostName, appHostPort,
           appTrackingUrl, appContext);
     this.randomGenerator = new Random(System.currentTimeMillis());
+    this.dagExecutionHistory = new HashMap<String, Double>();
   }
 
   @Override
@@ -163,9 +169,19 @@ public class PrimaryTenantYarnTaskSchedulerService extends
       File historyProfile = new File(this.dagExecutionHistoryPath);
       if (historyProfile.exists() && !historyProfile.isDirectory()) {
         try {
-          InputStream is = new FileInputStream(historyProfile);
-          String jsonText = IOUtils.toString(is);
-          this.dagExecutionHistory = new JSONObject(jsonText);
+          FileInputStream fileStream =
+              new FileInputStream(this.dagExecutionHistoryPath);
+          InputStreamReader streamReader = new InputStreamReader(fileStream);
+          JsonReader jsonReader = new JsonReader(streamReader);
+          JsonParser jsonParser = new JsonParser();
+          JsonElement jsonElement = jsonParser.parse(jsonReader);
+
+          Set<Entry<String, JsonElement>> entrySet =
+            ((JsonObject) jsonElement).entrySet();
+          for (Entry<String, JsonElement> entry : entrySet) {
+            this.dagExecutionHistory.put(entry.getKey(),
+                                         entry.getValue().getAsDouble());
+          }
         } catch (FileNotFoundException e) {
           LOG.warn("Can not find the specified history profile: " +
                    historyProfile);
@@ -206,8 +222,8 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         JobType type = JobType.T_JOB_MEDIUM;
         if (this.dagExecutionHistoryEnabled) {
           LOG.info("Incoming job hash: " + jobHash);
-          if (this.dagExecutionHistory.has(jobHash)) {
-            double totalDuration = this.dagExecutionHistory.getDouble(jobHash);
+          if (this.dagExecutionHistory.containsKey(jobHash)) {
+            double totalDuration = this.dagExecutionHistory.get(jobHash);
 
             if (totalDuration < this.thresholdShortAndMedium) {
               type = JobType.T_JOB_SHORT;
