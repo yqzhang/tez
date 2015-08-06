@@ -96,7 +96,8 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   // Whether to enable scheduling decisions based on historical executions
   private boolean dagExecutionHistoryEnabled;
   private String dagExecutionHistoryPath;
-  private HashMap<String, Double> dagExecutionHistory;
+  private HashMap<String, Double> dagExecutionHistoryDuration;
+  private HashMap<String, Integer> dagExecutionHistoryTasks;
 
   public PrimaryTenantYarnTaskSchedulerService(
                         TaskSchedulerAppCallback appClient,
@@ -108,7 +109,8 @@ public class PrimaryTenantYarnTaskSchedulerService extends
     super(appClient, containerSignatureMatcher, appHostName, appHostPort,
           appTrackingUrl, appContext);
     this.randomGenerator = new Random(System.currentTimeMillis());
-    this.dagExecutionHistory = new HashMap<String, Double>();
+    this.dagExecutionHistoryDuration = new HashMap<String, Double>();
+    this.dagExecutionHistoryTasks = new HashMap<String, Integer>();
   }
 
   @Override
@@ -179,8 +181,13 @@ public class PrimaryTenantYarnTaskSchedulerService extends
           Set<Entry<String, JsonElement>> entrySet =
             ((JsonObject) jsonElement).entrySet();
           for (Entry<String, JsonElement> entry : entrySet) {
-            this.dagExecutionHistory.put(entry.getKey(),
-                                         entry.getValue().getAsDouble());
+            JsonObject map = entry.getValue().getAsJsonObject();
+            this.dagExecutionHistoryDuration.put(
+                entry.getKey(),
+                map.get("total_duration").getAsDouble());
+            this.dagExecutionHistoryTasks.put(
+                entry.getKey(),
+                map.get("concurrent_tasks").getAsInt());
           }
         } catch (FileNotFoundException e) {
           LOG.warn("Can not find the specified history profile: " +
@@ -222,8 +229,9 @@ public class PrimaryTenantYarnTaskSchedulerService extends
         JobType type = JobType.T_JOB_MEDIUM;
         if (this.dagExecutionHistoryEnabled) {
           LOG.info("Incoming job hash: " + jobHash);
-          if (this.dagExecutionHistory.containsKey(jobHash)) {
-            double totalDuration = this.dagExecutionHistory.get(jobHash);
+          if (this.dagExecutionHistoryDuration.containsKey(jobHash)) {
+            double totalDuration = this.dagExecutionHistoryDuration.get(jobHash);
+            maximumConcurrentTasks = this.dagExecutionHistoryTasks.get(jobHash);
 
             if (totalDuration < this.thresholdShortAndMedium) {
               type = JobType.T_JOB_SHORT;

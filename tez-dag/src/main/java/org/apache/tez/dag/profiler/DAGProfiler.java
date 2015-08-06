@@ -258,7 +258,12 @@ public class DAGProfiler {
     String[] vertexNames = new String[this.vertices.size()];
     int i = 0;
     for (String vertexName : this.vertices.keySet()) {
-      vertexNames[i] = vertexName;
+      if (vertexName.startsWith("Reducer")) {
+        vertexNames[i] = vertexName + ":" +
+            this.appContext.getCurrentDAG().getVertex(vertexName).getTotalTasks();
+      } else {
+        vertexNames[i] = vertexName;
+      }
       i++;
     }
     Arrays.sort(vertexNames);
