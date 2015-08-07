@@ -595,6 +595,10 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
       } else {
         // unify allocations
         pushNewContainerToDelayed(containers);
+
+        // yunqi
+        this.appContext.getCurrentDAG().getProfiler().containersAllocated(containers.size());
+        // yunqi
         return;
       }
     }

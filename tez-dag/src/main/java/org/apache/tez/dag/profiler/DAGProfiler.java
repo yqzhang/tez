@@ -82,6 +82,12 @@ public class DAGProfiler {
   private boolean dagProfilingEnabled;
   private String dagProfilingDir;
 
+
+  // Moar profiling
+  private int numberOfAllocatedContainers;
+  private int numberOfFailedTaskAttempts;
+  private int numberOfKilledTaskAttempts;
+
   public DAGProfiler(AppContext appContext, DAGPlan dagPlan, String dagName,
                      Configuration conf) {
     this.appContext = appContext;
@@ -98,6 +104,9 @@ public class DAGProfiler {
     this.numOfEntryTasks = INF;
     this.currentNumOfTasksRunning = 0;
     this.maximumNumOfTasksRunning = 0;
+    this.numberOfAllocatedContainers = 0;
+    this.numberOfFailedTaskAttempts = 0;
+    this.numberOfKilledTaskAttempts = 0;
 
     this.dagProfilingEnabled = conf.getBoolean(
         TezConfiguration.TEZ_DAG_PROFILING_ENABLED,
@@ -297,6 +306,18 @@ public class DAGProfiler {
     return maxNumberOfConcurrentTasks;
   }
 
+  public void containersAllocated(int numberOfContainers) {
+    this.numberOfAllocatedContainers += numberOfContainers;
+  }
+
+  public void taskAttemptFailed() {
+    this.numberOfFailedTaskAttempts++;
+  }
+
+  public void taskAttemptKilled() {
+    this.numberOfKilledTaskAttempts++;
+  }
+
   public void finish() {
     /**
      * Structure of the log.
@@ -331,6 +352,10 @@ public class DAGProfiler {
         double totalDuration =
             (double) (this.finishtime - this.starttime) / MSEC_TO_SEC;
         writer.write(totalDuration + "\n");
+        // numberOfContainersAllocated, numberOfKilledTaskAttempts, numberOfFailedTaskAttempts
+        writer.write(this.numberOfAllocatedContainers + "," +
+                     this.numberOfKilledTaskAttempts + "," +
+                     this.numberOfFailedTaskAttempts + "\n");
         // maximumNumOfTasksRunning
         writer.write(this.maximumNumOfTasksRunning + "\n");
         // longestCriticalPath, numOfEntryVertices, numOfEntryTasks

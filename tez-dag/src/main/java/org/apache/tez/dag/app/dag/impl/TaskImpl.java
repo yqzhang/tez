@@ -645,11 +645,21 @@ public class TaskImpl implements Task, EventHandler<TaskEvent> {
           } else if (taskAttemptState.equals(TaskAttemptState.FAILED)){
             failedAttempts++;
             getVertex().incrementFailedTaskAttemptCount();
+
+            // yunqi
+            this.appContext.getCurrentDAG().getProfiler().taskAttemptFailed();
+            // yunqi
+
             successfulAttempt = null;
             recoveredState = TaskState.RUNNING; // reset to RUNNING, may fail after SUCCEEDED
           } else if (taskAttemptState.equals(TaskAttemptState.KILLED)) {
             successfulAttempt = null;
             getVertex().incrementKilledTaskAttemptCount();
+
+            // yunqi
+            this.appContext.getCurrentDAG().getProfiler().taskAttemptKilled();
+            // yunqi
+
             recoveredState = TaskState.RUNNING; // reset to RUNNING, may been killed after SUCCEEDED
           }
           return recoveredState;
@@ -1152,6 +1162,11 @@ public class TaskImpl implements Task, EventHandler<TaskEvent> {
       // we KillWaitAttemptCompletedTransitionready have a spare
       task.taskAttemptStatus.put(castEvent.getTaskAttemptID().getId(), true);
       task.getVertex().incrementKilledTaskAttemptCount();
+
+      // yunqi
+      task.getVertex().getAppContext().getCurrentDAG().getProfiler().taskAttemptKilled();
+      // yunqi
+
       if (task.getUncompletedAttemptsCount() == 0
           && task.successfulAttempt == null) {
         task.addAndScheduleAttempt();
@@ -1321,6 +1336,11 @@ public class TaskImpl implements Task, EventHandler<TaskEvent> {
     public TaskStateInternal transition(TaskImpl task, TaskEvent event) {
       task.failedAttempts++;
       task.getVertex().incrementFailedTaskAttemptCount();
+
+      // yunqi
+      task.getVertex().getAppContext().getCurrentDAG().getProfiler().taskAttemptFailed();
+      // yunqi
+
       TaskEventTAUpdate castEvent = (TaskEventTAUpdate) event;
       task.addDiagnosticInfo("TaskAttempt " + castEvent.getTaskAttemptID().getId() + " failed,"
           + " info=" + task.getAttempt(castEvent.getTaskAttemptID()).getDiagnostics());
