@@ -1595,7 +1595,7 @@ public class YarnTaskSchedulerService extends TaskSchedulerService
   }
 
   // yunqi: Assign a container to a given task
-  void assignContainer(Object task,
+  private void assignContainer(Object task,
       Container container,
       CookieContainerRequest assigned) {
     CookieContainerRequest request = removeTaskRequest(task);

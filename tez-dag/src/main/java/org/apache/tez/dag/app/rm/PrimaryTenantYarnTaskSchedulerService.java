@@ -209,86 +209,84 @@ public class PrimaryTenantYarnTaskSchedulerService extends
   }
 
   @Override
-  public void allocateTask(Object task, Resource capability,
-                           String[] hosts, String[] racks,
-                           Priority priority, Object containerSignature,
-                           Object clientCookie) {
+  public synchronized void allocateTask(Object task, Resource capability,
+                                        String[] hosts, String[] racks,
+                                        Priority priority, Object containerSignature,
+                                        Object clientCookie) {
 
-    synchronized (this.hasMadeSchedule) {
-      if (!this.hasMadeSchedule) {
-        // Estimate the number of tasks for the given job
-        TaskAttempt attemp = (TaskAttempt) task;
+    if (!this.hasMadeSchedule) {
+      // Estimate the number of tasks for the given job
+      TaskAttempt attemp = (TaskAttempt) task;
 
-        // Get the corresponding information from DAG profiling
-        int maximumConcurrentTasks =
-            this.appContext.getCurrentDAG().getProfiler().getMaximumConcurrentTasks();
-        String jobHash =
-            this.appContext.getCurrentDAG().getProfiler().getJobHash();
+      // Get the corresponding information from DAG profiling
+      int maximumConcurrentTasks =
+          this.appContext.getCurrentDAG().getProfiler().getMaximumConcurrentTasks();
+      String jobHash =
+          this.appContext.getCurrentDAG().getProfiler().getJobHash();
 
-        // Determine the type of the task
-        JobType type = JobType.T_JOB_MEDIUM;
-        if (this.dagExecutionHistoryEnabled) {
-          LOG.info("Incoming job hash: " + jobHash);
-          if (this.dagExecutionHistoryDuration.containsKey(jobHash)) {
-            double totalDuration = this.dagExecutionHistoryDuration.get(jobHash);
-            maximumConcurrentTasks = this.dagExecutionHistoryTasks.get(jobHash);
+      // Determine the type of the task
+      JobType type = JobType.T_JOB_MEDIUM;
+      if (this.dagExecutionHistoryEnabled) {
+        LOG.info("Incoming job hash: " + jobHash);
+        if (this.dagExecutionHistoryDuration.containsKey(jobHash)) {
+          double totalDuration = this.dagExecutionHistoryDuration.get(jobHash);
+          maximumConcurrentTasks = this.dagExecutionHistoryTasks.get(jobHash);
 
-            if (totalDuration < this.thresholdShortAndMedium) {
-              type = JobType.T_JOB_SHORT;
+          if (totalDuration < this.thresholdShortAndMedium) {
+            type = JobType.T_JOB_SHORT;
 
-              LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
-                       ", DAG History Execution: " + totalDuration +
-                       ", Job Type: SHORT.");
-            } else if (totalDuration < this.thresholdMediumAndLong) {
-              type = JobType.T_JOB_MEDIUM;
+            LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
+                     ", DAG History Execution: " + totalDuration +
+                     ", Job Type: SHORT.");
+          } else if (totalDuration < this.thresholdMediumAndLong) {
+            type = JobType.T_JOB_MEDIUM;
 
-              LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
-                       ", DAG History Execution: " + totalDuration+
-                       ", Job Type: MEDIUM.");
-            } else {
-              type = JobType.T_JOB_LONG;
-
-              LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
-                       ", DAG History Execution: " + totalDuration +
-                       ", Job Type: LONG.");
-            }
+            LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
+                     ", DAG History Execution: " + totalDuration+
+                     ", Job Type: MEDIUM.");
           } else {
-            LOG.warn("Wait, how come we have not seen this job before?!");
+            type = JobType.T_JOB_LONG;
+
+            LOG.info("Job Maximum Concurrent Tasks: " + maximumConcurrentTasks +
+                     ", DAG History Execution: " + totalDuration +
+                     ", Job Type: LONG.");
           }
+        } else {
+          LOG.warn("Wait, how come we have not seen this job before?!");
         }
-
-        // Make the scheduling decision
-        utilizationTable.updateUtilization();
-        ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
-            utilizationTable.pickClassesByProbability(maximumConcurrentTasks,
-                                                      vcoresPerTask,
-                                                      memoryPerTask,
-                                                      type);
-
-        // Build the CDF for future scheduling
-        scheduleCDF = new double[scheduleList.size()];
-        scheduleNodeLabelExpressions = new String[scheduleList.size()];
-        for (int i = 0; i < scheduleList.size(); i++) {
-          scheduleCDF[i] = scheduleList.get(i).getFirst();
-          // Put node label expression as ANY
-          if (scheduleList.get(i).getSecond().size() == 0) {
-            scheduleNodeLabelExpressions[i] = "*";
-          // Join the labels with " || "
-          } else {
-            scheduleNodeLabelExpressions[i] = 
-              Joiner.on(" || ").join(scheduleList.get(i).getSecond());
-          }
-        }
-
-        LOG.info("Scheduling decision has been made:");
-        for (int i = 0; i < this.scheduleCDF.length; i++) {
-          LOG.info(" * CDF: " + this.scheduleCDF[i] +
-                   ", node labe expression: " +
-                   this.scheduleNodeLabelExpressions[i]);
-        }
-
-        this.hasMadeSchedule = true;
       }
+
+      // Make the scheduling decision
+      utilizationTable.updateUtilization();
+      ArrayList<Tuple<Double, HashSet<String>>> scheduleList =
+          utilizationTable.pickClassesByProbability(maximumConcurrentTasks,
+                                                    vcoresPerTask,
+                                                    memoryPerTask,
+                                                    type);
+
+      // Build the CDF for future scheduling
+      scheduleCDF = new double[scheduleList.size()];
+      scheduleNodeLabelExpressions = new String[scheduleList.size()];
+      for (int i = 0; i < scheduleList.size(); i++) {
+        scheduleCDF[i] = scheduleList.get(i).getFirst();
+        // Put node label expression as ANY
+        if (scheduleList.get(i).getSecond().size() == 0) {
+          scheduleNodeLabelExpressions[i] = "*";
+        // Join the labels with " || "
+        } else {
+          scheduleNodeLabelExpressions[i] =
+            Joiner.on(" || ").join(scheduleList.get(i).getSecond());
+        }
+      }
+
+      LOG.info("Scheduling decision has been made:");
+      for (int i = 0; i < this.scheduleCDF.length; i++) {
+        LOG.info(" * CDF: " + this.scheduleCDF[i] +
+                 ", node labe expression: " +
+                 this.scheduleNodeLabelExpressions[i]);
+      }
+
+      this.hasMadeSchedule = true;
     }
 
     // Pick a class of environments based on probability
