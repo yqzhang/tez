@@ -273,10 +273,10 @@ public class PrimaryTenantYarnTaskSchedulerService extends
           // Put node label expression as ANY
           if (scheduleList.get(i).getSecond().size() == 0) {
             scheduleNodeLabelExpressions[i] = "*";
-          // Join the labels with "|"
+          // Join the labels with " || "
           } else {
             scheduleNodeLabelExpressions[i] = 
-              Joiner.on("|").join(scheduleList.get(i).getSecond());
+              Joiner.on(" || ").join(scheduleList.get(i).getSecond());
           }
         }
 
